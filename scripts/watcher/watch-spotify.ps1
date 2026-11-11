@@ -14,7 +14,7 @@ function Write-WatcherLog([string]$msg) {
 function Test-Bridge {
     try {
         $req = [System.Net.WebRequest]::Create("http://127.0.0.1:43196/status")
-        $req.Timeout = 500
+        $req.Timeout = 2500
         $req.Method = "GET"
         $resp = $req.GetResponse()
         $resp.Close()
@@ -30,14 +30,17 @@ while ($true) {
     $spotify = Get-Process -Name "Spotify" -ErrorAction SilentlyContinue
     if ($spotify) {
         if (-not (Test-Bridge)) {
-            Write-WatcherLog "Detected Spotify running, starting background bridge..."
-            if (Test-Path $silentVbsPath) {
-                Start-Process -FilePath "wscript.exe" -ArgumentList "`"$silentVbsPath`"" -WindowStyle Hidden
-            } else {
-                Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$psScriptPath`"" -WindowStyle Hidden
+            Start-Sleep -Milliseconds 1500
+            if (-not (Test-Bridge)) {
+                Write-WatcherLog "Detected Spotify running, starting background bridge..."
+                if (Test-Path $silentVbsPath) {
+                    Start-Process -FilePath "wscript.exe" -ArgumentList "`"$silentVbsPath`"" -WindowStyle Hidden
+                } else {
+                    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$psScriptPath`"" -WindowStyle Hidden
+                }
+                Start-Sleep -Seconds 5
             }
-            Start-Sleep -Seconds 4
         }
     }
-    Start-Sleep -Milliseconds 1500
+    Start-Sleep -Seconds 3
 }

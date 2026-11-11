@@ -70,7 +70,6 @@ export function renderMedia(source, type = "") {
 
             videoEl.onloadeddata = () => {
                 videoEl.classList.remove("we-media-hidden");
-                videoEl.style.setProperty("display", "block", "important");
                 if (!settings.wallpaperPaused) {
                     videoEl.play().catch((e) => {
                         console.warn("[Wallpaper Engine] Autoplay failed:", e);
@@ -78,19 +77,30 @@ export function renderMedia(source, type = "") {
                 }
             };
 
-            videoEl.src = url;
-            videoEl.load();
+            if (videoEl.src !== url) {
+                videoEl.src = url;
+                videoEl.load();
+            } else {
+                videoEl.classList.remove("we-media-hidden");
+                if (!settings.wallpaperPaused) {
+                    videoEl.play().catch(() => {});
+                }
+            }
         } else {
             videoEl.pause();
             videoEl.classList.add("we-media-hidden");
-            imageEl.onload = () => {
+
+            if (imageEl.src !== url) {
+                imageEl.onload = () => {
+                    imageEl.classList.remove("we-media-hidden");
+                };
+                imageEl.onerror = () => {
+                    console.warn("[Wallpaper Engine] Waiting to reload image from bridge...");
+                };
+                imageEl.src = url;
+            } else {
                 imageEl.classList.remove("we-media-hidden");
-                imageEl.style.setProperty("display", "block", "important");
-            };
-            imageEl.onerror = () => {
-                console.warn("[Wallpaper Engine] Waiting to reload image from bridge...");
-            };
-            imageEl.src = url;
+            }
         }
     } catch (err) {
         console.error("[Wallpaper Engine] renderMedia error:", err);
@@ -194,15 +204,18 @@ export async function syncFromWallpaperEngine(manual = false) {
                 return;
             }
 
-            const hasValidImage = imageEl && imageEl.src && imageEl.src !== "" && imageEl.naturalWidth > 0;
-            const hasValidVideo = videoEl && videoEl.src && videoEl.src !== "";
-            if (data.fileName === settings.lastSyncFile && (hasValidImage || hasValidVideo) && !manual) {
+            const syncKey = data.version ? `${data.fileName}@${data.version}` : data.fileName;
+            const isVideoMedia = (data.mediaType && data.mediaType.startsWith("video/")) || /\.(mp4|webm|mkv|mov)($|\?)/i.test(data.mediaUrl || "");
+            const hasValidMedia = isVideoMedia
+                ? (videoEl && videoEl.src && videoEl.src !== "" && !videoEl.classList.contains("we-media-hidden"))
+                : (imageEl && imageEl.src && imageEl.src !== "" && imageEl.naturalWidth > 0 && !imageEl.classList.contains("we-media-hidden"));
+            if (syncKey === settings.lastSyncFile && hasValidMedia && !manual) {
                 isSyncing = false;
                 updateBridgeStatusUI(true, data.title);
                 return;
             }
 
-            settings.lastSyncFile = data.fileName;
+            settings.lastSyncFile = syncKey;
             settings.mediaName = `${data.title} (${data.fileName})`;
             settings.mediaType = data.mediaType;
             saveSettings();

@@ -51,7 +51,6 @@ export function setupScrollWatcher() {
         if (beforeNode) {
             if (maxScrollTop > 0) {
                 const fadeProgress = Math.min(1, maxScrollTop / 240);
-                beforeNode.style.transform = `translateY(${-Math.round(maxScrollTop)}px)`;
                 beforeNode.style.opacity = (1 - fadeProgress).toFixed(2);
             } else {
                 beforeNode.style.transform = '';

@@ -40,17 +40,30 @@ function Start-SyncHttpServer {
             }
 
             $path = $req.Url.AbsolutePath
+
+            if ($path -eq "/status" -or $path -eq "/health" -or $path -eq "/ping") {
+                $msg = [System.Text.Encoding]::UTF8.GetBytes("OK")
+                $res.ContentType = "text/plain"
+                $res.StatusCode = 200
+                $res.ContentLength64 = $msg.Length
+                $res.OutputStream.Write($msg, 0, $msg.Length)
+                $res.Close()
+                continue
+            }
+
             $info = Get-CurrentWallpaperInfo -projectRoot $ProjectRoot
 
             if ($path -eq "/api/current") {
                 if ($info) {
+                    $ver = if ($info.Version) { $info.Version } else { 0 }
                     $data = @{
                         status    = "ok"
                         id        = $info.Id
                         title     = $info.Title
                         fileName  = $info.FileName
+                        version   = $ver
                         mediaType = $info.MediaType
-                        mediaUrl  = "http://127.0.0.1:${Port}/media?t=" + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+                        mediaUrl  = "http://127.0.0.1:${Port}/media?file=" + [System.Uri]::EscapeDataString($info.FileName) + "&v=" + $ver
                     }
                     $jsonStr = $data | ConvertTo-Json
                     $buf = [System.Text.Encoding]::UTF8.GetBytes($jsonStr)
@@ -67,9 +80,9 @@ function Start-SyncHttpServer {
                 $res.Close()
             }
             elseif ($path -eq "/media") {
-                if ($info -and (Test-Path $info.Path)) {
+                if ($info -and [System.IO.File]::Exists($info.Path)) {
                     $filePath = $info.Path
-                    $fileItem = Get-Item $filePath -ErrorAction SilentlyContinue
+                    $fileItem = [System.IO.FileInfo]$filePath
                     $fileLen  = $fileItem.Length
                     $range    = $req.Headers["Range"]
 
