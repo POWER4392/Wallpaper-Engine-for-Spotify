@@ -32,6 +32,6 @@ if (Test-Path $startLnkPath) {
 try {
     Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Spotify" -Value "`"$spotifyExe`" --autostart --minimized"
     Write-Host "  [OK] Restored Registry Run" -ForegroundColor Green
-} catch {}
+} catch { $null = $_ }
 
 Write-Host "`nRestored Spotify shortcuts to default." -ForegroundColor Green

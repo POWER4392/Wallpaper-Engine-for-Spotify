@@ -12,7 +12,8 @@ function Get-WallpaperEngineConfigPath {
             $cfg = Join-Path $steamPath "steamapps\common\wallpaper_engine\config.json"
             if (Test-Path $cfg) { return $cfg }
         }
-    } catch {}
+    }
+    catch { $null = $_ }
 
     $drives = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Root
     foreach ($d in $drives) {
@@ -32,12 +33,17 @@ function Get-WallpaperEngineConfigPath {
 }
 
 $script:cachedWallpaperInfo = $null
+$script:cachedMonitorKey = ""
 $script:lastWallpaperInfoCheck = [DateTime]::MinValue
 
 function Get-CurrentWallpaperInfo {
-    param([string]$projectRoot)
+    param(
+        [string]$projectRoot,
+        [string]$TargetMonitor = ""
+    )
 
-    if ($script:cachedWallpaperInfo -and ([DateTime]::UtcNow - $script:lastWallpaperInfoCheck).TotalMilliseconds -lt 1500) {
+    $cacheKey = "$TargetMonitor"
+    if ($script:cachedWallpaperInfo -and $script:cachedMonitorKey -eq $cacheKey -and ([DateTime]::UtcNow - $script:lastWallpaperInfoCheck).TotalMilliseconds -lt 1500) {
         return $script:cachedWallpaperInfo
     }
 
@@ -45,7 +51,7 @@ function Get-CurrentWallpaperInfo {
     if (-not $configPath) { return $null }
 
     try {
-        $raw  = Get-Content $configPath -Raw -Encoding UTF8 -ErrorAction Stop
+        $raw = Get-Content $configPath -Raw -Encoding UTF8 -ErrorAction Stop
         $json = $raw | ConvertFrom-Json
 
         $userProps = $json.PSObject.Properties | Where-Object { $_.Name -notin @("?installdirectory", "general") }
@@ -55,101 +61,106 @@ function Get-CurrentWallpaperInfo {
         $wpConfig = $userObj.general.wallpaperconfig
         if (-not $wpConfig) { return $null }
 
-        $monitor0 = $wpConfig.selectedwallpapers.Monitor0
-        if (-not $monitor0 -or -not $monitor0.file) {
-            $monitor0 = $wpConfig.selectedwallpapers.Monitor1
+        $monTarget = $null
+        if ($TargetMonitor -and $wpConfig.selectedwallpapers.$TargetMonitor -and $wpConfig.selectedwallpapers.$TargetMonitor.file) {
+            $monTarget = $wpConfig.selectedwallpapers.$TargetMonitor
         }
-        if (-not $monitor0 -or -not $monitor0.file) { return $null }
+        if (-not $monTarget -or -not $monTarget.file) {
+            $monTarget = $wpConfig.selectedwallpapers.Monitor0
+        }
+        if (-not $monTarget -or -not $monTarget.file) {
+            $monTarget = $wpConfig.selectedwallpapers.Monitor1
+        }
+        if (-not $monTarget -or -not $monTarget.file) { return $null }
 
-        $filePath = $monitor0.file
-        $folder   = [System.IO.Path]::GetDirectoryName($filePath)
+        $filePath = $monTarget.file
+        $folder = [System.IO.Path]::GetDirectoryName($filePath)
 
-        $title    = "Wallpaper Engine"
+        $title = "Wallpaper Engine"
+        $depId = $null
         $projFile = Join-Path $folder "project.json"
         if ([System.IO.File]::Exists($projFile)) {
             try {
                 $proj = [System.IO.File]::ReadAllText($projFile, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
                 if ($proj.title) { $title = $proj.title }
-            } catch {}
+                if ($proj.dependency) { $depId = [string]$proj.dependency }
+            }
+            catch { $null = $_ }
         }
 
         $targetMedia = $null
-        $mediaType   = "image/jpeg"
-        $directExt   = [System.IO.Path]::GetExtension($filePath).ToLower()
-        $fileExists  = [System.IO.File]::Exists($filePath)
+        $directExt = [System.IO.Path]::GetExtension($filePath).ToLower()
+        $fileExists = [System.IO.File]::Exists($filePath)
 
         if ($fileExists -and ($directExt -eq ".webm")) {
             $targetMedia = $filePath
-            $mediaType   = "video/webm"
         }
         elseif ($fileExists -and ($directExt -in @(".mp4", ".mkv", ".mov", ".avi"))) {
-            $resolvedVid = Extract-VideoWallpaper -videoPath $filePath -projectRoot $projectRoot
-            if ($resolvedVid) {
-                $targetMedia = $resolvedVid
-                $ext = [System.IO.Path]::GetExtension($targetMedia).ToLower()
-                if ($ext -eq ".webm") { $mediaType = "video/webm" }
-                elseif ($ext -eq ".png") { $mediaType = "image/png" }
-                elseif ($ext -eq ".webp") { $mediaType = "image/webp" }
-                else { $mediaType = "image/jpeg" }
-            }
+            $targetMedia = Extract-VideoWallpaper -videoPath $filePath -projectRoot $projectRoot
         }
-
-        if (-not $targetMedia -and $fileExists -and ($directExt -in @(".jpg", ".jpeg", ".png", ".webp"))) {
+        elseif ($fileExists -and ($directExt -in @(".jpg", ".jpeg", ".png", ".webp"))) {
             $targetMedia = $filePath
-            switch ($directExt) {
-                ".png"  { $mediaType = "image/png" }
-                ".webp" { $mediaType = "image/webp" }
-                default { $mediaType = "image/jpeg" }
+        }
+        elseif ($directExt -eq ".pkg") {
+            $targetMedia = Extract-SceneWallpaper -pkgPath $filePath -projectRoot $projectRoot
+        }
+
+        $searchFolders = @($folder)
+        if ($depId) {
+            $parentRoot = [System.IO.Path]::GetDirectoryName($folder)
+            if ($parentRoot) {
+                $depFolder = Join-Path $parentRoot $depId
+                if ([System.IO.Directory]::Exists($depFolder)) {
+                    $searchFolders += $depFolder
+                }
             }
         }
 
-        if (-not $targetMedia -and $directExt -eq ".pkg") {
-            $extracted = Extract-SceneWallpaper -pkgPath $filePath -projectRoot $projectRoot
-            if ($extracted) {
-                $targetMedia = $extracted
-                $ext = [System.IO.Path]::GetExtension($targetMedia).ToLower()
-                if ($ext -eq ".webm") { $mediaType = "video/webm" }
-                elseif ($ext -eq ".png") { $mediaType = "image/png" }
-                elseif ($ext -eq ".webp") { $mediaType = "image/webp" }
-                else { $mediaType = "image/jpeg" }
-            }
-        }
+        foreach ($scanDir in $searchFolders) {
+            if ($targetMedia -or -not [System.IO.Directory]::Exists($scanDir)) { continue }
 
-        if (-not $targetMedia -and [System.IO.Directory]::Exists($folder)) {
-            $allFiles = [System.IO.Directory]::GetFiles($folder) | ForEach-Object { [System.IO.FileInfo]$_ }
-            $webmVid = $allFiles | Where-Object { $_.Extension -ieq ".webm" } | Sort-Object Length -Descending | Select-Object -First 1
+            $pkgFiles = [System.IO.Directory]::GetFiles($scanDir, "*.pkg", [System.IO.SearchOption]::TopDirectoryOnly) | ForEach-Object { [System.IO.FileInfo]$_ } | Sort-Object Length -Descending
+            if ($pkgFiles) {
+                $extracted = Extract-SceneWallpaper -pkgPath $pkgFiles[0].FullName -projectRoot $projectRoot
+                if ($extracted) {
+                    $targetMedia = $extracted
+                    break
+                }
+            }
+
+            $allFiles = [System.IO.Directory]::GetFiles($scanDir, "*.*", [System.IO.SearchOption]::AllDirectories) | ForEach-Object { [System.IO.FileInfo]$_ }
+            $webmVid = $allFiles | Where-Object { $_.Extension -ieq ".webm" -and $_.Length -gt 50000 } | Sort-Object Length -Descending | Select-Object -First 1
             if ($webmVid) {
                 $targetMedia = $webmVid.FullName
-                $mediaType   = "video/webm"
-            } else {
-                $vids = $allFiles | Where-Object { $_.Extension.ToLower() -in @(".mp4", ".mkv", ".mov", ".avi") } | Sort-Object Length -Descending
-                if ($vids) {
-                    $resolvedVid = Extract-VideoWallpaper -videoPath $vids[0].FullName -projectRoot $projectRoot
-                    if ($resolvedVid) {
-                        $targetMedia = $resolvedVid
-                        $ext = [System.IO.Path]::GetExtension($targetMedia).ToLower()
-                        if ($ext -eq ".webm") { $mediaType = "video/webm" }
-                        elseif ($ext -eq ".png") { $mediaType = "image/png" }
-                        elseif ($ext -eq ".webp") { $mediaType = "image/webp" }
-                        else { $mediaType = "image/jpeg" }
-                    }
+                break
+            }
+
+            $vids = $allFiles | Where-Object { $_.Extension.ToLower() -in @(".mp4", ".mkv", ".mov", ".avi") } | Sort-Object Length -Descending
+            if ($vids) {
+                $resolvedVid = Extract-VideoWallpaper -videoPath $vids[0].FullName -projectRoot $projectRoot
+                if ($resolvedVid) {
+                    $targetMedia = $resolvedVid
+                    break
                 }
             }
-            if (-not $targetMedia) {
-                $imgs = $allFiles | Where-Object { $_.Extension.ToLower() -in @(".jpg", ".jpeg", ".png", ".webp") -and $_.BaseName -notmatch "(?i)^preview$" } | Sort-Object Length -Descending
-                if ($imgs) {
-                    $best = $imgs | Where-Object { $_.BaseName -match "(?i)^(bg|background|image|wallpaper|scene|main|full|cover)" } | Select-Object -First 1
-                    if (-not $best) { $best = $imgs | Select-Object -First 1 }
-                    $targetMedia = $best.FullName
-                    $ext = $best.Extension.ToLower()
-                    if ($ext -eq ".png") { $mediaType = "image/png" }
-                    elseif ($ext -eq ".webp") { $mediaType = "image/webp" }
-                    else { $mediaType = "image/jpeg" }
-                }
+
+            $imgs = $allFiles | Where-Object { $_.Extension.ToLower() -in @(".jpg", ".jpeg", ".png", ".webp") -and $_.BaseName -notmatch "(?i)^(preview|error_img|face-\d+)$" -and $_.Length -gt 50000 } | Sort-Object Length -Descending
+            if ($imgs) {
+                $best = $imgs | Where-Object { $_.BaseName -match "(?i)(bg|background|image|wallpaper|scene|main|full|cover|poster)" } | Select-Object -First 1
+                if (-not $best) { $best = $imgs | Select-Object -First 1 }
+                $targetMedia = $best.FullName
+                break
             }
         }
 
         if (-not $targetMedia) { return $null }
+
+        $mediaType = switch ([System.IO.Path]::GetExtension($targetMedia).ToLower()) {
+            ".webm" { "video/webm" }
+            ".png" { "image/png" }
+            ".webp" { "image/webp" }
+            default { "image/jpeg" }
+        }
 
         $workshopId = [System.IO.Path]::GetFileName($folder)
         if (-not $workshopId -or $workshopId -eq "") { $workshopId = "default" }
@@ -157,7 +168,8 @@ function Get-CurrentWallpaperInfo {
         $fileVer = 0
         try {
             $fileVer = [int64]([DateTimeOffset]([System.IO.FileInfo]$targetMedia).LastWriteTimeUtc).ToUnixTimeSeconds()
-        } catch {}
+        }
+        catch { $null = $_ }
 
         $result = @{
             Id        = $workshopId
@@ -169,9 +181,11 @@ function Get-CurrentWallpaperInfo {
             Folder    = $folder
         }
         $script:cachedWallpaperInfo = $result
+        $script:cachedMonitorKey = $cacheKey
         $script:lastWallpaperInfoCheck = [DateTime]::UtcNow
         return $result
-    } catch {
+    }
+    catch {
         return $null
     }
 }

@@ -8,7 +8,7 @@ function Write-WatcherLog([string]$msg) {
     try {
         $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         "$timestamp - $msg" | Out-File -FilePath $logPath -Append -Encoding utf8
-    } catch {}
+    } catch { $null = $_ }
 }
 
 function Test-Bridge {

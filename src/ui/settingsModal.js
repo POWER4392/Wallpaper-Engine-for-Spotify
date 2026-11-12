@@ -1,5 +1,5 @@
 import { settings, saveSettings, saveMedia } from '../modules/settings.js';
-import { renderMedia, syncFromWallpaperEngine, toggleWallpaperPause, setWallpaperSource } from '../modules/mediaRenderer.js';
+import { renderMedia, syncFromWallpaperEngine, toggleWallpaperPause, setWallpaperSource, applyVideoLoopSettings } from '../modules/mediaRenderer.js';
 
 export function openModal() {
         if (document.getElementById("we-modal-overlay")) return;
@@ -93,6 +93,23 @@ export function openModal() {
                     </button>
                 </div>
 
+                <div style="background:rgba(80,150,255,0.06); border:1px solid rgba(80,150,255,0.22); border-radius:10px; padding:12px; margin-bottom:14px;">
+                    <div style="font-weight:700; font-size:13px; color:#5096ff; margin-bottom:8px;">Video Playback & Intro Loop:</div>
+                    <div class="we-row" style="margin-bottom:8px !important;">
+                        <label>
+                            <span>Skip Video Intro / Loop Start:</span>
+                            <b id="we-intro-trim-val">${settings.videoIntroTrim || 0}s</b>
+                        </label>
+                        <input type="range" class="we-slider" id="we-intro-trim" min="0" max="30" step="0.5" value="${settings.videoIntroTrim || 0}">
+                    </div>
+                    <div class="we-checkbox-row" style="margin-bottom:0 !important;">
+                        <label class="we-chk-label" style="font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="we-chk-skip-start" ${settings.videoSkipIntroOnStart ? 'checked' : ''}>
+                            <span>Skip intro immediately on start</span>
+                        </label>
+                    </div>
+                </div>
+
                 
                 <div style="background:rgba(30,215,96,0.06); border:1px solid rgba(30,215,96,0.25); border-radius:10px; padding:12px; margin-bottom:14px;">
                     <div style="font-weight:700; font-size:13px; color:#1ed760; margin-bottom:8px;">Wallpaper Size & Position:</div>
@@ -107,11 +124,31 @@ export function openModal() {
                     </div>
 
                     <div class="we-row"style="margin-bottom:8px !important;">
-                        <label><span>Focus Alignment:</span></label>
+                        <label><span>Horizontal Focus (Screen / Subject):</span>
+                            <b id="we-pos-x-val">${settings.posHorizontal || 50}%</b>
+                        </label>
+                        <div class="we-btn-group"id="we-pos-x-group"style="margin-bottom:6px;">
+                            <button class="we-btn-pill ${(settings.posHorizontal || 50) === 0 ? 'active' : ''}"data-val="0">Left (Details 0%)</button>
+                            <button class="we-btn-pill ${(settings.posHorizontal || 50) === 50 ? 'active' : ''}"data-val="50">Center (50%)</button>
+                            <button class="we-btn-pill ${(settings.posHorizontal || 50) === 100 ? 'active' : ''}"data-val="100">Right (Subject 100%)</button>
+                        </div>
+                        <input type="range"class="we-slider"id="we-pos-x"min="0"max="100"value="${settings.posHorizontal || 50}">
+                    </div>
+
+                    <div class="we-row"style="margin-bottom:8px !important;">
+                        <label><span>Vertical Focus:</span></label>
                         <div class="we-btn-group"id="we-pos-group">
-                            <button class="we-btn-pill ${settings.position === 'top' ? 'active' : ''}"data-val="top">Top (Focus Head)</button>
+                            <button class="we-btn-pill ${settings.position === 'top' ? 'active' : ''}"data-val="top">Top (Head)</button>
                             <button class="we-btn-pill ${settings.position === 'center' ? 'active' : ''}"data-val="center">Center</button>
                             <button class="we-btn-pill ${settings.position === 'bottom' ? 'active' : ''}"data-val="bottom">Bottom</button>
+                        </div>
+                    </div>
+
+                    <div class="we-row"style="margin-bottom:8px !important;">
+                        <label><span>Dual-Monitor Wallpaper Source:</span></label>
+                        <div class="we-btn-group"id="we-mon-group">
+                            <button class="we-btn-pill ${(!settings.targetMonitor || settings.targetMonitor === 'Monitor0') ? 'active' : ''}"data-val="Monitor0">Monitor 1</button>
+                            <button class="we-btn-pill ${settings.targetMonitor === 'Monitor1' ? 'active' : ''}"data-val="Monitor1">Monitor 2</button>
                         </div>
                     </div>
 
@@ -540,6 +577,26 @@ pause
             saveSettings();
         };
 
+        const introSlider = document.getElementById("we-intro-trim");
+        if (introSlider) {
+            introSlider.oninput = (e) => {
+                const val = parseFloat(e.target.value) || 0;
+                settings.videoIntroTrim = val;
+                document.getElementById("we-intro-trim-val").textContent = val + "s";
+                saveSettings();
+                applyVideoLoopSettings();
+            };
+        }
+
+        const skipStartChk = document.getElementById("we-chk-skip-start");
+        if (skipStartChk) {
+            skipStartChk.onchange = (e) => {
+                settings.videoSkipIntroOnStart = e.target.checked;
+                saveSettings();
+                applyVideoLoopSettings();
+            };
+        };
+
         const chkHomeTabs = document.getElementById("we-chk-home-quick-tabs");
         if (chkHomeTabs) {
             chkHomeTabs.onchange = (e) => {
@@ -566,6 +623,45 @@ pause
                 btn.classList.add("active");
                 settings.position = btn.getAttribute("data-val");
                 saveSettings();
+            };
+        });
+
+        document.querySelectorAll("#we-pos-x-group .we-btn-pill").forEach((btn) => {
+            btn.onclick = () => {
+                document.querySelectorAll("#we-pos-x-group .we-btn-pill").forEach(b =>b.classList.remove("active"));
+                btn.classList.add("active");
+                const val = parseInt(btn.getAttribute("data-val"));
+                settings.posHorizontal = val;
+                const s = document.getElementById("we-pos-x");
+                if (s) s.value = val;
+                const v = document.getElementById("we-pos-x-val");
+                if (v) v.textContent = val + "%";
+                saveSettings();
+            };
+        });
+
+        const sliderPosX = document.getElementById("we-pos-x");
+        if (sliderPosX) {
+            sliderPosX.oninput = (e) => {
+                const val = parseInt(e.target.value);
+                settings.posHorizontal = val;
+                const v = document.getElementById("we-pos-x-val");
+                if (v) v.textContent = val + "%";
+                document.querySelectorAll("#we-pos-x-group .we-btn-pill").forEach(b => {
+                    b.classList.toggle("active", parseInt(b.getAttribute("data-val")) === val);
+                });
+                saveSettings();
+            };
+        }
+
+        document.querySelectorAll("#we-mon-group .we-btn-pill").forEach((btn) => {
+            btn.onclick = () => {
+                document.querySelectorAll("#we-mon-group .we-btn-pill").forEach(b =>b.classList.remove("active"));
+                btn.classList.add("active");
+                settings.targetMonitor = btn.getAttribute("data-val");
+                settings.lastSyncFile = "";
+                saveSettings();
+                syncFromWallpaperEngine(true);
             };
         });
 

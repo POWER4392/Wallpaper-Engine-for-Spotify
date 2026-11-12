@@ -14,10 +14,14 @@ export const defaultSettings = {
     topBarBlur: 0,
     searchBgColor: "#181818",
     searchBgOpacity: 0.96,
-    bgBlur: 8,
-    brightness: 95,
+    bgBlur: 0,
+    brightness: 100,
     fitMode: "cover",
     position: "center",
+    posHorizontal: 50,
+    targetMonitor: "Monitor0",
+    videoIntroTrim: 0,
+    videoSkipIntroOnStart: true,
     zoom: 100,
     autoSync: true,
     wallpaperPaused: false,
@@ -47,6 +51,10 @@ export function loadSettings() {
         if (settings.searchBgOpacity === undefined) settings.searchBgOpacity = 0.96;
         if (settings.homeQuickTabs === undefined) settings.homeQuickTabs = true;
         if (settings.homeQuickTabsLang === undefined) settings.homeQuickTabsLang = "auto";
+        if (settings.posHorizontal === undefined) settings.posHorizontal = 50;
+        if (settings.targetMonitor === undefined) settings.targetMonitor = "Monitor0";
+        if (settings.videoIntroTrim === undefined) settings.videoIntroTrim = 0;
+        if (settings.videoSkipIntroOnStart === undefined) settings.videoSkipIntroOnStart = true;
     } catch (e) {
         console.warn("[Wallpaper Engine] Failed to read localStorage:", e);
     }
@@ -75,7 +83,14 @@ export function applyVisualSettings() {
     document.documentElement.style.setProperty("--we-img-blur", (settings.bgBlur || 0) + "px");
     document.documentElement.style.setProperty("--we-img-brightness", (settings.brightness || 100) + "%");
     document.documentElement.style.setProperty("--we-fit-mode", settings.fitMode || "cover");
-    document.documentElement.style.setProperty("--we-pos", settings.position || "center");
+    let computedPos = settings.position || "center";
+    if (settings.posHorizontal !== undefined) {
+        let vert = "50%";
+        if (settings.position === "top") vert = "0%";
+        else if (settings.position === "bottom") vert = "100%";
+        computedPos = `${settings.posHorizontal}% ${vert}`;
+    }
+    document.documentElement.style.setProperty("--we-pos", computedPos);
     document.documentElement.style.setProperty("--we-zoom", settings.zoom || 100);
 
     if (settings.wallpaperPaused) {

@@ -1,5 +1,5 @@
 $ErrorActionPreference = "SilentlyContinue"
-try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { $null = $_ }
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  Spotify <-> Wallpaper Engine Sync - Setup Chay Ngam" -ForegroundColor Cyan

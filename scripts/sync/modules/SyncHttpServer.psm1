@@ -51,33 +51,106 @@ function Start-SyncHttpServer {
                 continue
             }
 
-            $info = Get-CurrentWallpaperInfo -projectRoot $ProjectRoot
+            $reqMon = $req.QueryString["monitor"]
+            $info = Get-CurrentWallpaperInfo -projectRoot $ProjectRoot -TargetMonitor $reqMon
 
             if ($path -eq "/api/current") {
                 if ($info) {
                     $ver = if ($info.Version) { $info.Version } else { 0 }
+                    $cacheRoot = Join-Path $env:TEMP "we_cache"
+                    $cacheFolder = Join-Path $cacheRoot $info.Id
+                    $posterName = $null
+                    if (Test-Path $cacheFolder) {
+                        $candidatePosters = @("resolved_wallpaper.jpg", "video_frame.jpg", "background.png")
+                        foreach ($cp in $candidatePosters) {
+                            $candPath = Join-Path $cacheFolder $cp
+                            if ([System.IO.File]::Exists($candPath) -and ([System.IO.FileInfo]$candPath).Length -gt 5000) {
+                                $posterName = $cp
+                                break
+                            }
+                        }
+                    }
+
+                    $posterUrl = if ($posterName) {
+                        "http://127.0.0.1:${Port}/poster?id=" + [System.Uri]::EscapeDataString($info.Id) + "&f=" + [System.Uri]::EscapeDataString($posterName) + "&v=" + $ver
+                    } else {
+                        "http://127.0.0.1:${Port}/media?file=" + [System.Uri]::EscapeDataString($info.FileName) + "&v=" + $ver
+                    }
+
+                    $hasIntro = $false
+                    $introDuration = 0.0
+                    $metaFile = Join-Path $cacheFolder "video_meta.json"
+                    if ([System.IO.File]::Exists($metaFile)) {
+                        try {
+                            $meta = [System.IO.File]::ReadAllText($metaFile, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+                            if ($meta.hasIntro) {
+                                $hasIntro = $true
+                                if ($meta.introDuration) { $introDuration = [double]$meta.introDuration }
+                            }
+                        } catch { $null = $_ }
+                    }
+
                     $data = @{
-                        status    = "ok"
-                        id        = $info.Id
-                        title     = $info.Title
-                        fileName  = $info.FileName
-                        version   = $ver
-                        mediaType = $info.MediaType
-                        mediaUrl  = "http://127.0.0.1:${Port}/media?file=" + [System.Uri]::EscapeDataString($info.FileName) + "&v=" + $ver
+                        status        = "ok"
+                        id            = $info.Id
+                        title         = $info.Title
+                        fileName      = $info.FileName
+                        version       = $ver
+                        mediaType     = $info.MediaType
+                        mediaUrl      = "http://127.0.0.1:${Port}/media?file=" + [System.Uri]::EscapeDataString($info.FileName) + "&v=" + $ver
+                        posterUrl     = $posterUrl
+                        hasIntro      = $hasIntro
+                        introDuration = $introDuration
                     }
                     $jsonStr = $data | ConvertTo-Json
                     $buf = [System.Text.Encoding]::UTF8.GetBytes($jsonStr)
                     $res.ContentType = "application/json; charset=utf-8"
                     $res.ContentLength64 = $buf.Length
-                    $res.OutputStream.Write($buf, 0, $buf.Length)
+                    if ($req.HttpMethod -ne "HEAD") {
+                        $res.OutputStream.Write($buf, 0, $buf.Length)
+                    }
                 } else {
                     $data = @{ status = "no_wallpaper" }
                     $buf  = [System.Text.Encoding]::UTF8.GetBytes(($data | ConvertTo-Json))
                     $res.ContentType = "application/json; charset=utf-8"
                     $res.ContentLength64 = $buf.Length
-                    $res.OutputStream.Write($buf, 0, $buf.Length)
+                    if ($req.HttpMethod -ne "HEAD") {
+                        $res.OutputStream.Write($buf, 0, $buf.Length)
+                    }
                 }
                 $res.Close()
+            }
+            elseif ($path -eq "/poster") {
+                $qId = $req.QueryString["id"]
+                $qF = $req.QueryString["f"]
+                if (-not $qF) { $qF = "resolved_wallpaper.jpg" }
+                $posterPath = Join-Path $env:TEMP "we_cache\$qId\$qF"
+                if (Test-Path $posterPath) {
+                    $pItem = [System.IO.FileInfo]$posterPath
+                    $res.ContentType = if ($pItem.Extension -ieq ".png") { "image/png" } else { "image/jpeg" }
+                    $res.ContentLength64 = $pItem.Length
+                    if ($req.HttpMethod -ne "HEAD") {
+                        $fs = [System.IO.File]::OpenRead($posterPath)
+                        try {
+                            $buf = New-Object byte[] 65536
+                            $remain = $pItem.Length
+                            while ($remain -gt 0) {
+                                $toRead = [int][Math]::Min($remain, 65536)
+                                $read = $fs.Read($buf, 0, $toRead)
+                                if ($read -le 0) { break }
+                                try {
+                                    $res.OutputStream.Write($buf, 0, $read)
+                                } catch { break }
+                                $remain -= $read
+                            }
+                        } finally {
+                            $fs.Close()
+                        }
+                    }
+                } else {
+                    $res.StatusCode = 404
+                }
+                try { $res.Close() } catch { $null = $_ }
             }
             elseif ($path -eq "/media") {
                 if ($info -and [System.IO.File]::Exists($info.Path)) {
@@ -102,31 +175,51 @@ function Start-SyncHttpServer {
                         $res.Headers.Add("Content-Range", "bytes $start-$end/$fileLen")
                         $res.ContentLength64 = $count
 
-                        $fs = [System.IO.File]::OpenRead($filePath)
-                        try {
-                            $fs.Seek($start, [System.IO.SeekOrigin]::Begin) | Out-Null
-                            $buf = New-Object byte[] 65536
-                            $remain = $count
-                            while ($remain -gt 0) {
-                                $toRead = [int][Math]::Min($remain, 65536)
-                                $read = $fs.Read($buf, 0, $toRead)
-                                if ($read -le 0) { break }
-                                $res.OutputStream.Write($buf, 0, $read)
-                                $remain -= $read
+                        if ($req.HttpMethod -ne "HEAD") {
+                            $fs = [System.IO.File]::OpenRead($filePath)
+                            try {
+                                $fs.Seek($start, [System.IO.SeekOrigin]::Begin) | Out-Null
+                                $buf = New-Object byte[] 65536
+                                $remain = $count
+                                while ($remain -gt 0) {
+                                    $toRead = [int][Math]::Min($remain, 65536)
+                                    $read = $fs.Read($buf, 0, $toRead)
+                                    if ($read -le 0) { break }
+                                    try {
+                                        $res.OutputStream.Write($buf, 0, $read)
+                                    } catch { break }
+                                    $remain -= $read
+                                }
+                            } finally {
+                                $fs.Close()
                             }
-                        } finally {
-                            $fs.Close()
                         }
                     } else {
                         $res.StatusCode = 200
                         $res.ContentLength64 = $fileLen
-                        $bytes = [System.IO.File]::ReadAllBytes($filePath)
-                        $res.OutputStream.Write($bytes, 0, $bytes.Length)
+                        if ($req.HttpMethod -ne "HEAD") {
+                            $fs = [System.IO.File]::OpenRead($filePath)
+                            try {
+                                $buf = New-Object byte[] 65536
+                                $remain = $fileLen
+                                while ($remain -gt 0) {
+                                    $toRead = [int][Math]::Min($remain, 65536)
+                                    $read = $fs.Read($buf, 0, $toRead)
+                                    if ($read -le 0) { break }
+                                    try {
+                                        $res.OutputStream.Write($buf, 0, $read)
+                                    } catch { break }
+                                    $remain -= $read
+                                }
+                            } finally {
+                                $fs.Close()
+                            }
+                        }
                     }
                 } else {
                     $res.StatusCode = 404
                 }
-                try { $res.Close() } catch {}
+                try { $res.Close() } catch { $null = $_ }
             }
             else {
                 $msg = [System.Text.Encoding]::UTF8.GetBytes("Wallpaper Engine Spotify Sync Bridge OK")

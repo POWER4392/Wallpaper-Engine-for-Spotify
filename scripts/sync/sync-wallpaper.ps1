@@ -1,10 +1,11 @@
-try { $Host.UI.RawUI.WindowTitle = "Wallpaper Engine - Spotify Sync Bridge" } catch {}
+try { $Host.UI.RawUI.WindowTitle = "Wallpaper Engine - Spotify Sync Bridge" } catch { $null = $_ }
 
 $currentPid = $PID
+$myParent = (Get-CimInstance Win32_Process -Filter "ProcessId = $currentPid" -ErrorAction SilentlyContinue).ParentProcessId
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.ProcessId -ne $currentPid -and $_.Name -match "powershell" -and $_.CommandLine -match "sync-wallpaper\.ps1" -and $_.CommandLine -notmatch "Get-CimInstance"
+    $_.ProcessId -ne $currentPid -and $_.ProcessId -ne $myParent -and $_.Name -match "powershell" -and $_.CommandLine -match "-File\s+.*sync-wallpaper\.ps1"
 } | ForEach-Object {
-    try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+    try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch { $null = $_ }
 }
 
 $projectRoot = (Get-Item "$PSScriptRoot\..\..").FullName

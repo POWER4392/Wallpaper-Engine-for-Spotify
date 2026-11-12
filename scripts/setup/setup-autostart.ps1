@@ -1,4 +1,4 @@
-$wsh = New-Object -ComObject WScript.Shell
+﻿$wsh = New-Object -ComObject WScript.Shell
 $vbsPath = (Join-Path $PSScriptRoot "launch-spotify.vbs")
 $spotifyExe = "$env:APPDATA\Spotify\Spotify.exe"
 if (-not (Test-Path $spotifyExe)) {

@@ -5,6 +5,16 @@ let videoEl = null;
 let isSyncing = false;
 let syncAbort = null;
 
+export function applyVideoLoopSettings() {
+    if (!videoEl) videoEl = document.getElementById("we-video");
+    if (!videoEl) return;
+    const trim = Number(settings.videoIntroTrim) || 0;
+    videoEl.loop = trim <= 0;
+    if (trim > 0 && videoEl.currentTime < trim && settings.videoSkipIntroOnStart) {
+        videoEl.currentTime = trim;
+    }
+}
+
 export function applyPauseState() {
     if (!videoEl) videoEl = document.getElementById("we-video");
     if (videoEl) {
@@ -32,7 +42,7 @@ export function toggleWallpaperPause(paused) {
     }
 }
 
-export function renderMedia(source, type = "") {
+export function renderMedia(source, type = "", posterUrl = "", autoIntroTrim = 0) {
     try {
         if (!imageEl) imageEl = document.getElementById("we-image");
         if (!videoEl) videoEl = document.getElementById("we-video");
@@ -45,18 +55,53 @@ export function renderMedia(source, type = "") {
             (isBlob && source.type && source.type.startsWith("video/"));
 
         if (isVideo) {
-            imageEl.classList.add("we-media-hidden");
+            if (posterUrl && imageEl) {
+                if (imageEl.src !== posterUrl) {
+                    imageEl.src = posterUrl;
+                }
+                imageEl.classList.remove("we-media-hidden");
+            }
 
             videoEl.muted = true;
             videoEl.defaultMuted = true;
             videoEl.volume = 0;
-            videoEl.loop = true;
+            const manualTrim = Number(settings.videoIntroTrim) || 0;
+            const currentTrim = manualTrim > 0 ? manualTrim : (Number(autoIntroTrim) || 0);
+            videoEl.loop = currentTrim <= 0;
             videoEl.playsInline = true;
             videoEl.autoplay = true;
+
+            let initialSeekDone = false;
+            videoEl.onended = () => {
+                const curTrim = (Number(settings.videoIntroTrim) || 0) || (Number(autoIntroTrim) || 0);
+                if (curTrim > 0 && videoEl.duration && curTrim < videoEl.duration) {
+                    videoEl.currentTime = curTrim;
+                } else {
+                    videoEl.currentTime = 0;
+                }
+                videoEl.play().catch(() => {});
+            };
+
+            videoEl.ontimeupdate = () => {
+                const curTrim = (Number(settings.videoIntroTrim) || 0) || (Number(autoIntroTrim) || 0);
+                if (curTrim > 0 && videoEl.duration && videoEl.currentTime >= videoEl.duration - 0.15) {
+                    videoEl.currentTime = curTrim;
+                    if (!settings.wallpaperPaused) {
+                        videoEl.play().catch(() => {});
+                    }
+                }
+            };
 
             videoEl.onerror = () => {
                 const err = videoEl.error;
                 console.error("[Wallpaper Engine] videoEl playback error:", err);
+                videoEl.classList.add("we-media-hidden");
+                if (posterUrl && imageEl) {
+                    if (imageEl.src !== posterUrl) imageEl.src = posterUrl;
+                    imageEl.classList.remove("we-media-hidden");
+                } else if (imageEl.src) {
+                    imageEl.classList.remove("we-media-hidden");
+                }
                 const code = err ? err.code : 0;
                 let msg = "Video playback error";
                 if (code === 4) {
@@ -68,8 +113,15 @@ export function renderMedia(source, type = "") {
                 updateBridgeStatusUI(false, msg);
             };
 
-            videoEl.onloadeddata = () => {
+            const onVideoReady = () => {
                 videoEl.classList.remove("we-media-hidden");
+                imageEl.classList.add("we-media-hidden");
+                const mTrim = Number(settings.videoIntroTrim) || 0;
+                const effectiveTrim = mTrim > 0 ? mTrim : (Number(autoIntroTrim) || 0);
+                if (!initialSeekDone && settings.videoSkipIntroOnStart && effectiveTrim > 0 && videoEl.duration && effectiveTrim < videoEl.duration) {
+                    initialSeekDone = true;
+                    videoEl.currentTime = effectiveTrim;
+                }
                 if (!settings.wallpaperPaused) {
                     videoEl.play().catch((e) => {
                         console.warn("[Wallpaper Engine] Autoplay failed:", e);
@@ -77,13 +129,18 @@ export function renderMedia(source, type = "") {
                 }
             };
 
+            videoEl.onloadeddata = onVideoReady;
+            videoEl.onplaying = onVideoReady;
+
             if (videoEl.src !== url) {
                 videoEl.src = url;
                 videoEl.load();
             } else {
-                videoEl.classList.remove("we-media-hidden");
                 if (!settings.wallpaperPaused) {
                     videoEl.play().catch(() => {});
+                }
+                if (videoEl.readyState >= 2) {
+                    onVideoReady();
                 }
             }
         } else {
@@ -98,6 +155,9 @@ export function renderMedia(source, type = "") {
                     console.warn("[Wallpaper Engine] Waiting to reload image from bridge...");
                 };
                 imageEl.src = url;
+                if (imageEl.complete && imageEl.naturalWidth > 0) {
+                    imageEl.classList.remove("we-media-hidden");
+                }
             } else {
                 imageEl.classList.remove("we-media-hidden");
             }
@@ -186,9 +246,10 @@ export async function syncFromWallpaperEngine(manual = false) {
         syncAbort = new AbortController();
         const timeoutId = setTimeout(() => syncAbort.abort(), 5000);
 
+        const monParam = encodeURIComponent(settings.targetMonitor || "Monitor0");
         let res;
         try {
-            res = await fetch(`${BRIDGE_API}/api/current`, {
+            res = await fetch(`${BRIDGE_API}/api/current?monitor=${monParam}`, {
                 cache: "no-store",
                 signal: syncAbort.signal
             });
@@ -220,7 +281,7 @@ export async function syncFromWallpaperEngine(manual = false) {
             settings.mediaType = data.mediaType;
             saveSettings();
 
-            renderMedia(data.mediaUrl, data.mediaType);
+            renderMedia(data.mediaUrl, data.mediaType, data.posterUrl, data.introDuration || 0);
 
             if (manual && window.Spicetify && Spicetify.showNotification) {
                 Spicetify.showNotification("Synced: " + data.title);

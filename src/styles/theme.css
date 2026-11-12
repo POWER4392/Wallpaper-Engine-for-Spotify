@@ -21,7 +21,7 @@
     --background-highlight: rgba(30, 30, 30, calc(var(--we-bg-opacity) + 0.1)) !important;
     --background-tinted-base: rgba(18, 18, 18, var(--we-bg-opacity));
     --spice-main: transparent !important;
-    --spice-sidebar: rgba(18, 18, 18, var(--we-sidebar-opacity)) !important;
+    --spice-sidebar: #000000 !important;
     --spice-player: rgba(12, 12, 12, var(--we-player-opacity)) !important;
     --spice-card: rgba(255, 255, 255, 0.05) !important;
 }
@@ -104,6 +104,10 @@ section,
 html,
 body,
 #main,
+.Root,
+#main > .Root > div,
+.LiEjwLua6RNBCvlysAT2,
+#main-view,
 .Root__top-container,
 .Root__main-view,
 .main-view-container,
@@ -112,6 +116,11 @@ body,
 .under-main-view,
 .RootContainer,
 .Root__globalNav,
+.gyQ3lHdZrOLMpQhHd2rw,
+.vuqd37gilTzgRKw2trTT,
+.Dm_tXf4_OMK2m7UbfxgV.i7X8RVjZPy66Kx0dUHIK:before,
+.encore-dark-theme .encore-app-frame-set,
+.encore-dark-theme .encore-muted-accent-set,
 main,
 section,
 .main-home-content,
@@ -471,7 +480,15 @@ dialog[open],
 [role="dialog"]:not(.we-dialog):not([data-testid="search-modal"]),
 [data-encore-id="dialog"],
 .encore-light-theme.EvmeKyemPmmbdjRZQezw,
-.encore-light-theme.FnUUCAJ79nf4_lZGH0DB {
+.encore-light-theme.FnUUCAJ79nf4_lZGH0DB,
+.zgG9WSeiO4h0v5UlYPDD,
+.lYaHTagyY6ldz_DLumwG,
+.mCh0k19iLfFYE1AGPgd3,
+.eXxMrRVGaPMLQ6dbQwwV,
+.U3QCOD6yUjLq69vfUqRC,
+.Jmay4m5T9oY2ThzaDAMR,
+.ixNu7Kll1pUsSiCYy539,
+.pG0OmoosHeNbG7JmBj5b {
     --background-base: #181818 !important;
     --background-elevated-base: #242424 !important;
     --text-base: #ffffff !important;
@@ -606,13 +623,9 @@ dialog[open],
 div[role="menu"],
 ul[role="menu"],
 nav[role="menu"],
-[data-encore-id="popover"],
 [data-encore-id="menu"],
 [data-encore-id="contextMenu"],
-[data-tippy-root]>.tippy-box,
-.tippy-box[data-theme~="context-menu"],
-.tippy-box[data-theme~="popover"],
-.tippy-box[data-theme~="activation"] {
+.tippy-box[data-theme~="context-menu"] {
     --background-base: #242424 !important;
     --background-elevated-base: #242424 !important;
     --background-elevated-highlight: rgba(255, 255, 255, 0.12) !important;
@@ -628,6 +641,71 @@ nav[role="menu"],
     opacity: 1 !important;
     visibility: visible !important;
     z-index: 9999 !important;
+}
+
+[role="tooltip"],
+[data-encore-id="tooltip"],
+[data-encore-id="popover"],
+[data-encore-id="snackbar"],
+[data-tippy-root]>.tippy-box,
+[data-tippy-root] .tippy-content,
+[data-tippy-root] .encore-light-theme,
+[data-tippy-root] .encore-inverted-light-set,
+[role="tooltip"] .encore-light-theme,
+[role="tooltip"] .encore-inverted-light-set,
+[data-encore-id="popover"] .encore-light-theme,
+[data-encore-id="popover"] .encore-inverted-light-set,
+.tippy-box[data-theme~="popover"],
+.tippy-box[data-theme~="activation"],
+.notistack-MuiContent,
+[class*="notistack-MuiContent"],
+.notistack-Snackbar .encore-light-theme,
+.notistack-SnackbarContainer .encore-light-theme,
+.W1vSh9LnwRGIJBODcwJ3,
+.encore-light-theme.W1vSh9LnwRGIJBODcwJ3,
+.main-notificationBubble-NotificationBubble,
+[class*="notificationBubble"] {
+    --background-base: #242424 !important;
+    --background-elevated-base: #242424 !important;
+    --text-base: #ffffff !important;
+    --text-subdued: #d1d1d1 !important;
+    --essential-base: #ffffff !important;
+    --parents-essential-base: #ffffff !important;
+    background-color: #242424 !important;
+    background: #242424 !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+}
+
+[role="tooltip"] *,
+[data-encore-id="tooltip"] *,
+[data-encore-id="popover"] *,
+[data-encore-id="snackbar"] *,
+[data-tippy-root]>.tippy-box *,
+.notistack-Snackbar *,
+.notistack-MuiContent *,
+#notistack-snackbar,
+#notistack-snackbar *,
+.W1vSh9LnwRGIJBODcwJ3 *,
+.main-notificationBubble-NotificationBubble * {
+    color: #ffffff !important;
+    --text-base: #ffffff !important;
+    --essential-base: #ffffff !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+[data-tippy-root][aria-hidden="true"],
+.tippy-box[data-state="hidden"],
+[role="tooltip"][aria-hidden="true"],
+[data-encore-id="popover"][aria-hidden="true"] {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
 
 .iokCRJjXyIjWZgavMwbm *,
@@ -678,6 +756,20 @@ nav[role="menu"],
 [data-encore-id="chip"][aria-selected="true"],
 [data-encore-id="chip"][aria-checked="true"],
 [data-encore-id="chip"].encore-inverted-light-set,
+button.encore-inverted-light-set,
+button .encore-inverted-light-set,
+a.encore-inverted-light-set,
+a .encore-inverted-light-set,
+.encore-dark-theme .encore-inverted-light-set,
+.encore-dark-theme .encore-inverted-set,
+.encore-dark-theme .encore-bright-accent-set,
+.encore-dark-theme .encore-positive-set,
+.encore-dark-theme .encore-warning-set,
+.encore-light-theme .encore-inverted-light-set,
+.encore-light-theme .encore-bright-accent-set,
+.encore-light-theme .encore-positive-set,
+.encore-light-theme .encore-warning-set,
+.Eg294RhMGE2iv6YOIHd8,
 button[aria-checked="true"][class*="chip"],
 button[aria-selected="true"][class*="chip"],
 .e-10860-chip[aria-checked="true"],
@@ -698,6 +790,20 @@ button[aria-selected="true"][class*="chip"],
 [data-encore-id="chip"][aria-selected="true"] *,
 [data-encore-id="chip"][aria-checked="true"] *,
 [data-encore-id="chip"].encore-inverted-light-set *,
+button.encore-inverted-light-set *,
+button .encore-inverted-light-set *,
+a.encore-inverted-light-set *,
+a .encore-inverted-light-set *,
+.encore-dark-theme .encore-inverted-light-set *,
+.encore-dark-theme .encore-inverted-set *,
+.encore-dark-theme .encore-bright-accent-set *,
+.encore-dark-theme .encore-positive-set *,
+.encore-dark-theme .encore-warning-set *,
+.encore-light-theme .encore-inverted-light-set *,
+.encore-light-theme .encore-bright-accent-set *,
+.encore-light-theme .encore-positive-set *,
+.encore-light-theme .encore-warning-set *,
+.Eg294RhMGE2iv6YOIHd8 *,
 button[aria-checked="true"][class*="chip"] *,
 button[aria-selected="true"][class*="chip"] *,
 .e-10860-chip[aria-checked="true"] *,
@@ -975,6 +1081,19 @@ aside .da733NgUMo3KFbRwTBHD button,
 .main-playButton-PlayButton {
     background-color: #1ed760 !important;
     color: #000000 !important;
+    --text-base: #000000 !important;
+}
+
+[data-encore-id="buttonPrimary"]:has(.encore-inverted-light-set) {
+    background-color: transparent !important;
+    background: transparent !important;
+}
+
+[data-encore-id="buttonPrimary"] *,
+[data-testid*="play-button"] *,
+.main-playButton-PlayButton * {
+    color: #000000 !important;
+    --text-base: #000000 !important;
 }
 
 [data-encore-id="buttonPrimary"] svg,
@@ -1105,13 +1224,34 @@ aside .da733NgUMo3KFbRwTBHD button,
 }
 
 [data-testid="lyrics-npv-section"] p,
-[data-testid="lyrics-npv-section"] span,
-[data-testid="lyrics-npv-section"] div,
+[data-testid="lyrics-npv-section"] h2,
+[data-testid="lyrics-npv-section"] span:not(button *):not([class*="Button"]),
 .GtL6v5f4OhSsTWIFTm5j p,
-.GtL6v5f4OhSsTWIFTm5j span,
-.GtL6v5f4OhSsTWIFTm5j div {
+.GtL6v5f4OhSsTWIFTm5j h2,
+.GtL6v5f4OhSsTWIFTm5j span:not(button *):not([class*="Button"]) {
     opacity: 1 !important;
     visibility: visible !important;
+}
+
+[data-testid="lyrics-npv-section"] button,
+.GtL6v5f4OhSsTWIFTm5j button {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    transition: opacity 0.2s ease !important;
+}
+
+[data-testid="lyrics-npv-section"]:hover button,
+.GtL6v5f4OhSsTWIFTm5j:hover button {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+[data-testid="lyrics-npv-section"] button,
+[data-testid="lyrics-npv-section"] button * {
+    color: #000000 !important;
+    --text-base: #000000 !important;
 }
 
 .main-card-card {
@@ -1124,6 +1264,8 @@ aside .da733NgUMo3KFbRwTBHD button,
 }
 
 #Desktop_LeftSidebar_Id,
+.yQCyOSVcMCen_NJKPHB6,
+.sKQBt_niqUrjEllLDApe,
 .bQsutxbyIOatthweRHfK,
 [class*="bQsutxbyIOatthweRHfK"],
 .jpHQLr33ZT5pJGBVFmjJ,
@@ -1276,6 +1418,8 @@ aside#Desktop_PanelContainer_Id>div,
 [class*="z0qdvwslOFVOAihShLIq"],
 .L5dM7nzQpMJtRkvZZBZL,
 [class*="L5dM7nzQpMJtRkvZZBZL"],
+.XvuTwlgQRqJ5NnVLN9ZH,
+.ukcftIJVxfBopi1UFFvF,
 [grid-area="now-playing-bar"],
 .Root__now-playing-bar,
 .Root__now-playing-bar footer,
@@ -1463,9 +1607,7 @@ aside[data-testid="now-playing-bar"] [class*="ConnectBar"],
 [aria-label*="Tiếp"],
 button[data-testid*="chevron"],
 [class*="chevrons"],
-[class*="chevron"],
-[data-encore-id="buttonSecondary"],
-[data-encore-id="buttonTertiary"] {
+[class*="chevron"] {
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto !important;
@@ -1531,7 +1673,6 @@ button[data-testid*="chevron"],
     pointer-events: none !important;
 }
 
-/* 1. ARTIST COVER PHOTO (ẢNH BÌA NGHỆ SĨ) - Visible with smooth gradient fade & zero click blocking */
 .before-scroll-node {
     display: block !important;
     pointer-events: none !important;
@@ -1550,7 +1691,6 @@ button[data-testid*="chevron"],
     pointer-events: none !important;
 }
 
-/* Ensure cover photo renders visibly with smooth bottom fade into wallpaper */
 .MlWLm9_5qALi6Ay0_OCr,
 [class*="MlWLm9_5qALi6Ay0_OCr"],
 .FNyVAJwiyJvKSs7fgcmI,
@@ -1572,7 +1712,6 @@ button[data-testid*="chevron"],
     visibility: visible !important;
 }
 
-/* HIDE ONLY FULLSCREEN OVERLAY & SOLID BLACK GRADIENT THAT BLOCK CLICKS */
 .P1kwly6O5plr1VQVdOLV,
 [data-testid="overscroll-background"],
 .venMPE3QitySGonlITLf:after,
@@ -1583,7 +1722,6 @@ button[data-testid*="chevron"],
     height: 0 !important;
 }
 
-/* 2. ARTIST HEADER - Ensure full visibility, layout, and artist name */
 [data-testid="entity-header"],
 .bXvkHCNOXigrpicAqmgd,
 [class*="bXvkHCNOXigrpicAqmgd"] {
@@ -1600,7 +1738,6 @@ button[data-testid*="chevron"],
     visibility: visible !important;
 }
 
-/* Make header background gradients transparent without hiding header content */
 .hbNOZbHD3bPL3OcHQWNn,
 [class*="hbNOZbHD3bPL3OcHQWNn"],
 .uP1rcUSIWCFaOZaoH0ZG,
@@ -1611,7 +1748,6 @@ button[data-testid*="chevron"],
     pointer-events: none !important;
 }
 
-/* 3. ARTIST CONTENT & ACTION BAR - Transparent backgrounds, natural grid layout */
 .GECIboaMmkIqHDKwQ3vR,
 [class*="GECIboaMmkIqHDKwQ3vR"],
 [data-testid="artist-page"],
@@ -1639,7 +1775,6 @@ button[data-testid*="chevron"],
     pointer-events: auto !important;
 }
 
-/* 4. TRACKLIST ROWS - Fully clickable & clear hover feedback */
 [role="row"],
 .xwwlUJUZLpjPnZByq04Y,
 [data-testid="tracklist-row"],
@@ -1672,7 +1807,6 @@ button[data-testid*="chevron"],
     background-color: rgba(255, 255, 255, 0.22) !important;
 }
 
-/* 5. TRACK PLAY / PAUSE BUTTON ON HOVER */
 [role="row"] .l9kmLysnmcseyWh8xf0E,
 [role="row"] button[aria-label*="Play"],
 [role="row"] button[aria-label*="Pause"],

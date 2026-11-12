@@ -106,7 +106,66 @@ export function setupOfflineHandler() {
         }
     }
 
+    const recentNotifications = new Map();
+
+    function installNotificationDeduplicator() {
+        if (typeof Spicetify === "undefined") return;
+
+        if (typeof Spicetify.showNotification === "function" && !Spicetify.showNotification._weWrapped) {
+            const origShow = Spicetify.showNotification.bind(Spicetify);
+            const wrappedShow = (message, isError = false, msTimeout) => {
+                const key = typeof message === "string" ? message.trim() : String(message?.props?.children || message);
+                const now = Date.now();
+                const lastTime = recentNotifications.get(key) || 0;
+                if (key && now - lastTime < 5000) {
+                    return;
+                }
+                if (key) recentNotifications.set(key, now);
+                return origShow(message, isError, msTimeout);
+            };
+            wrappedShow._weWrapped = true;
+            Spicetify.showNotification = wrappedShow;
+        }
+
+        if (Spicetify.Snackbar && typeof Spicetify.Snackbar.enqueueSnackbar === "function" && !Spicetify.Snackbar.enqueueSnackbar._weWrapped) {
+            const origEnqueue = Spicetify.Snackbar.enqueueSnackbar.bind(Spicetify.Snackbar);
+            const wrappedEnqueue = (message, options) => {
+                const key = typeof message === "string" ? message.trim() : String(message?.props?.children || "");
+                const now = Date.now();
+                const lastTime = recentNotifications.get(key) || 0;
+                if (key && now - lastTime < 5000) {
+                    return null;
+                }
+                if (key) recentNotifications.set(key, now);
+                return origEnqueue(message, options);
+            };
+            wrappedEnqueue._weWrapped = true;
+            Spicetify.Snackbar.enqueueSnackbar = wrappedEnqueue;
+        }
+    }
+
+    function deduplicateAndEnhanceSnackbars() {
+        const seenTexts = new Set();
+        const snackbars = document.querySelectorAll(".notistack-Snackbar");
+        snackbars.forEach((sb) => {
+            const text = (sb.textContent || "").trim();
+            if (text && seenTexts.has(text)) {
+                sb.style.setProperty("display", "none", "important");
+                return;
+            }
+            if (text) seenTexts.add(text);
+
+            const bubble = sb.querySelector(".W1vSh9LnwRGIJBODcwJ3, .encore-light-theme, #notistack-snackbar");
+            if (bubble) {
+                bubble.style.setProperty("background-color", "rgba(32, 32, 32, 0.96)", "important");
+                bubble.style.setProperty("color", "#ffffff", "important");
+            }
+        });
+    }
+
     const scanModals = () => {
+        installNotificationDeduplicator();
+        deduplicateAndEnhanceSnackbars();
         document.querySelectorAll(".EvmeKyemPmmbdjRZQezw, .FnUUCAJ79nf4_lZGH0DB").forEach(enhanceModal);
     };
 
