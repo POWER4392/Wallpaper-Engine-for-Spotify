@@ -1,12 +1,30 @@
 import sys, os, json, math, struct, re, subprocess, shutil
 import numpy as np
-from PIL import Image, ImageChops, ImageDraw, ImageFont
+from PIL import Image, ImageChops
 
 sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
 
 def parse_vec(val, default):
     if isinstance(val, dict):
-        val = val.get('value', '')
+        anim = val.get('animation')
+        base_vec = parse_vec(val.get('value', ''), default)
+        if isinstance(anim, dict):
+            opts = anim.get('options', {})
+            if isinstance(opts, dict) and str(opts.get('mode', '')).lower() == 'single':
+                is_rel = bool(anim.get('relative', False))
+                out = list(base_vec)
+                for i in range(min(len(out), 3)):
+                    frames = anim.get(f'c{i}')
+                    if isinstance(frames, list) and frames:
+                        last_kf = max(frames, key=lambda kf: kf.get('frame', 0) if isinstance(kf, dict) else 0)
+                        if isinstance(last_kf, dict) and 'value' in last_kf:
+                            try:
+                                fv = float(last_kf['value'])
+                                out[i] = (base_vec[i] + fv) if is_rel else fv
+                            except:
+                                pass
+                return out
+        return base_vec
     if isinstance(val, (int, float)):
         out = list(default)
         if out:
@@ -34,7 +52,7 @@ def is_obj_visible(obj):
 def get_obj_alpha(obj):
     alpha = obj.get('alpha', 1.0)
     if isinstance(alpha, dict):
-        alpha = alpha.get('value', 1.0)
+        return max(0.0, min(1.0, parse_vec(alpha, (1.0,))[0]))
     try:
         return max(0.0, min(1.0, float(alpha)))
     except:
@@ -95,11 +113,19 @@ def render_puppet_mdl_layer(mdl_path, tex_path):
         if p == -1:
             return None, 0.0, 0.0
         pos_after = p + 6
-        marker = b.find(b'\x0f\x00\x80\x01', pos_after, pos_after + 64)
-        if marker != -1:
-            vbytes = struct.unpack_from('<I', b, marker + 4)[0]
-            vstart = marker + 8
-        else:
+        vbytes, vstart = 0, 0
+        scan_end = min(len(b) - 8, pos_after + 64)
+        for off in range(pos_after, scan_end):
+            if b[off + 2:off + 4] in (b'\x80\x01', b'\x81\x01', b'\x80\x00', b'\x81\x00'):
+                cand_vb = struct.unpack_from('<I', b, off + 4)[0]
+                cand_vs = off + 8
+                cand_ip = cand_vs + cand_vb
+                if cand_vb > 0 and cand_ip + 4 <= len(b):
+                    cand_ib = struct.unpack_from('<I', b, cand_ip)[0]
+                    if cand_ib > 0 and cand_ip + 4 + cand_ib <= len(b):
+                        vbytes, vstart = cand_vb, cand_vs
+                        break
+        if vbytes == 0:
             vbytes = struct.unpack_from('<I', b, pos_after + 4)[0]
             vstart = pos_after + 8
         idx_pos = vstart + vbytes
@@ -110,13 +136,22 @@ def render_puppet_mdl_layer(mdl_path, tex_path):
             return None, 0.0, 0.0
         tris = np.ndarray((ibytes // 6, 3), dtype='<u2', buffer=b, offset=idx_pos + 4)
         max_idx = int(tris.max()) if len(tris) > 0 else 0
-        stride = 80 if (vbytes % 80 == 0 and vbytes // 80 > max_idx) else (52 if vbytes % 52 == 0 else 0)
+        stride = 0
+        for s in (80, 84, 52, 76, 88, 92, 64, 48):
+            if vbytes % s == 0 and vbytes // s == max_idx + 1:
+                stride = s
+                break
+        if stride == 0:
+            for s in (80, 84, 52, 76, 88, 92, 64, 48):
+                if vbytes % s == 0 and vbytes // s > max_idx:
+                    stride = s
+                    break
         if stride == 0:
             return None, 0.0, 0.0
         nverts = vbytes // stride
         verts = np.ndarray((nverts, stride // 4), dtype='<f4', buffer=b, offset=vstart)
         pos = verts[:, 0:2]
-        uv = verts[:, 18:20] if stride == 80 else verts[:, 11:13]
+        uv = verts[:, -2:]
         tex = np.asarray(Image.open(tex_path).convert('RGBA'))
         th, tw = tex.shape[:2]
         xmin_f, xmax_f = float(pos[:, 0].min()), float(pos[:, 0].max())
@@ -308,6 +343,19 @@ def get_model_and_material_info(cache_dir, img_ref):
             info['tex_file'] = p
             break
 
+    if not info['is_puppet']:
+        for cand_stem in (base, mat_base):
+            if not cand_stem:
+                continue
+            for cand_dir in (cache_dir, os.path.join(cache_dir, 'models')):
+                pf = os.path.join(cand_dir, cand_stem + '_puppet.mdl')
+                if os.path.exists(pf):
+                    info['is_puppet'] = True
+                    info['puppet_file'] = pf
+                    break
+            if info['is_puppet']:
+                break
+
     for mat_c in mat_candidates:
         if os.path.exists(mat_c):
             mat_data = load_json_safe(mat_c)
@@ -368,43 +416,6 @@ def get_model_and_material_info(cache_dir, img_ref):
 
     return info
 
-def find_master_artwork(cache_dir, min_pixels=0):
-    master_keywords = ('原', 'orig', 'original', 'wallpaper', 'full', 'complete', 'all')
-    mask_patterns = ('mask', 'particle', 'sprite', 'noise', 'brush', 'distortion', 'normal', 'opacitymap', 'text_', 'font', 'clipping')
-    candidates = []
-    for f in os.listdir(cache_dir):
-        if f.startswith(('resolved_', 'test_', 'preview_')):
-            continue
-        ext = os.path.splitext(f)[1].lower()
-        if ext not in ('.png', '.jpg', '.jpeg', '.webp'):
-            continue
-        low = f.lower()
-        if any(p in low for p in mask_patterns):
-            continue
-        bname = os.path.splitext(f)[0].lower()
-        if not any(k in bname for k in master_keywords):
-            continue
-        fp = os.path.join(cache_dir, f)
-        try:
-            with Image.open(fp) as im:
-                w, h = im.size
-                pixels = w * h
-                if pixels < min_pixels:
-                    continue
-                rgba = im.convert("RGBA") if im.mode in ('P', 'LA', 'RGBA') else im
-                zero_alpha_ratio = 0.0
-                if 'A' in rgba.mode:
-                    alpha = rgba.split()[3]
-                    zero_alpha_ratio = alpha.histogram()[0] / pixels
-                if zero_alpha_ratio < 0.05:
-                    candidates.append((pixels, os.path.getsize(fp), fp, f))
-        except:
-            pass
-    if candidates:
-        candidates.sort(reverse=True)
-        return candidates[0][2], candidates[0][3]
-    return None, None
-
 def apply_colorkey(layer_im, key_rgb, tolerance=0.35, fuzziness=0.1):
     try:
         import numpy as np
@@ -428,6 +439,7 @@ def apply_layer_effects_and_tint(layer_im, obj, cache_dir):
 
     extra_alpha = 1.0
     opacity_masks = []
+    tint_passes = []
 
     for eff in obj.get('effects', []):
         if not is_obj_visible(eff):
@@ -437,8 +449,20 @@ def apply_layer_effects_and_tint(layer_im, obj, cache_dir):
             for pas in eff.get('passes', []):
                 vals = pas.get('constantshadervalues', {})
                 if isinstance(vals, dict) and 'color' in vals:
-                    cvec = parse_vec(vals['color'], (cr, cg, cb))
-                    cr, cg, cb = cvec[0], cvec[1], cvec[2]
+                    cvec = parse_vec(vals['color'], (1.0, 1.0, 1.0))
+                    t_alpha = 1.0
+                    if 'alpha' in vals:
+                        t_alpha = max(0.0, min(1.0, parse_vec(vals['alpha'], (1.0,))[0]))
+                    texs = pas.get('textures', [])
+                    t_mask = None
+                    if isinstance(texs, list) and len(texs) >= 2 and texs[1]:
+                        m_base = os.path.splitext(os.path.basename(str(texs[1])))[0]
+                        for ext in ('.png', '.jpg', '.jpeg', '.webp'):
+                            mp = os.path.join(cache_dir, m_base + ext)
+                            if os.path.exists(mp):
+                                t_mask = mp
+                                break
+                    tint_passes.append((cvec[:3], t_alpha, t_mask))
         elif 'opacity' in efile:
             for pas in eff.get('passes', []):
                 vals = pas.get('constantshadervalues', {})
@@ -472,6 +496,26 @@ def apply_layer_effects_and_tint(layer_im, obj, cache_dir):
         g = g.point(lambda p: max(0, min(255, int(round(p * cg)))))
         b = b.point(lambda p: max(0, min(255, int(round(p * cb)))))
 
+    if tint_passes:
+        arr = np.asarray(Image.merge("RGBA", (r, g, b, a))).astype(np.float32)
+        for tcol, t_alpha, t_mask in tint_passes:
+            if t_mask:
+                try:
+                    with Image.open(t_mask) as mim:
+                        ml = mim.convert("L")
+                        if ml.size != layer_im.size:
+                            ml = ml.resize(layer_im.size, Image.Resampling.LANCZOS)
+                        m_arr = (np.asarray(ml, dtype=np.float32) / 255.0) * t_alpha
+                except:
+                    m_arr = np.full((layer_im.size[1], layer_im.size[0]), t_alpha, dtype=np.float32)
+            else:
+                m_arr = np.full((layer_im.size[1], layer_im.size[0]), t_alpha, dtype=np.float32)
+            m3 = m_arr[:, :, None]
+            tc = np.array([tcol[0] * 255.0, tcol[1] * 255.0, tcol[2] * 255.0], dtype=np.float32)
+            arr[:, :, :3] = arr[:, :, :3] * (1.0 - m3) + tc * m3
+        tinted = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA")
+        r, g, b, a = tinted.split()
+
     for mp in opacity_masks:
         try:
             with Image.open(mp) as mim:
@@ -487,6 +531,44 @@ def apply_layer_effects_and_tint(layer_im, obj, cache_dir):
 
     return Image.merge("RGBA", (r, g, b, a))
 
+def composite_layer(canvas, crop_layer, lx, ly, blending, color_blend_mode):
+    cbm = int(color_blend_mode) if color_blend_mode is not None else 0
+    is_add = (blending == 'additive') or (cbm in (9, 31))
+    if not is_add and cbm in (0, 14, 17, 22, 23, 25, 30):
+        canvas.alpha_composite(crop_layer, (lx, ly))
+        return
+    lw, lh = crop_layer.size
+    base_crop = canvas.crop((lx, ly, lx + lw, ly + lh))
+    dst = np.asarray(base_crop, dtype=np.float32)
+    src = np.asarray(crop_layer, dtype=np.float32)
+    sa = src[:, :, 3:4] / 255.0
+    drgb = dst[:, :, :3] / 255.0
+    srgb = src[:, :, :3] / 255.0
+    if is_add:
+        blended = np.clip(drgb + srgb * sa, 0.0, 1.0)
+    elif cbm == 7:
+        screen = 1.0 - (1.0 - drgb) * (1.0 - srgb)
+        blended = drgb * (1.0 - sa) + screen * sa
+    elif cbm == 6:
+        lighten = np.maximum(drgb, srgb)
+        blended = drgb * (1.0 - sa) + lighten * sa
+    elif cbm == 1:
+        darken = np.minimum(drgb, srgb)
+        blended = drgb * (1.0 - sa) + darken * sa
+    elif cbm == 2:
+        mult = drgb * srgb
+        blended = drgb * (1.0 - sa) + mult * sa
+    elif cbm == 11:
+        ov = np.where(drgb < 0.5, 2.0 * drgb * srgb, 1.0 - 2.0 * (1.0 - drgb) * (1.0 - srgb))
+        blended = drgb * (1.0 - sa) + ov * sa
+    else:
+        canvas.alpha_composite(crop_layer, (lx, ly))
+        return
+    out = np.empty_like(dst, dtype=np.uint8)
+    out[:, :, :3] = np.clip(blended * 255.0, 0, 255).astype(np.uint8)
+    out[:, :, 3] = np.clip(dst[:, :, 3], 0, 255).astype(np.uint8)
+    canvas.paste(Image.fromarray(out, "RGBA"), (lx, ly))
+
 def extract_video_frame_to_jpg(video_path, out_jpg):
     tools_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ffmpeg_exe = os.path.join(tools_dir, "ffmpeg", "ffmpeg.exe")
@@ -497,59 +579,6 @@ def extract_video_frame_to_jpg(video_path, out_jpg):
             if os.path.exists(out_jpg) and os.path.getsize(out_jpg) > 5000:
                 return True
     return False
-
-def render_text_layer(canvas, obj, tr, cw, ch):
-    raw_txt = obj.get('text', '')
-    if isinstance(raw_txt, dict):
-        if 'script' in raw_txt:
-            return False
-        txt_val = raw_txt.get('value', '')
-    else:
-        txt_val = raw_txt
-    if not txt_val or not isinstance(txt_val, str):
-        return False
-    txt_val = txt_val.strip()
-    low_txt = txt_val.lower()
-    junk_patterns = (
-        '12:34', '12:34 am', '12:34 pm', '00:00', '000:00', '<date>', 'day',
-        'song title', 'artist', 'artist name', 'jul 05', '01:23:45',
-        '自定义', 'custom', 'follow', 'subscribe', 'bilibili', '赞助', 'donate',
-        'fps', '群', 'qq', 'switch', '开关'
-    )
-    if any(p in low_txt for p in junk_patterns):
-        return False
-    pt = obj.get('pointsize', 36.0)
-    if isinstance(pt, dict):
-        pt = pt.get('value', 36.0)
-    try:
-        pt = float(pt)
-    except:
-        pt = 36.0
-    font_px = max(12, int(round(pt * abs(tr['sy']) * 1.6)))
-    font = None
-    for fname in ("C:\\Windows\\Fonts\\msyhbd.ttc", "C:\\Windows\\Fonts\\msyh.ttc", "C:\\Windows\\Fonts\\segoeuib.ttf", "C:\\Windows\\Fonts\\arialbd.ttf"):
-        if os.path.exists(fname):
-            try:
-                font = ImageFont.truetype(fname, font_px)
-                break
-            except:
-                pass
-    if font is None:
-        font = ImageFont.load_default()
-    rgb_vec = parse_vec(obj.get('color', '1 1 1'), (1.0, 1.0, 1.0))
-    rgb = tuple(max(0, min(255, int(round(c * 255)))) for c in rgb_vec[:3])
-    alpha_byte = int(round(255 * tr['alpha']))
-    txt_im = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
-    d = ImageDraw.Draw(txt_im)
-    cx, cy = tr['cx'], ch - tr['cy']
-    try:
-        bbox = d.textbbox((0, 0), txt_val, font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        d.text((cx - tw / 2.0 - bbox[0], cy - th / 2.0 - bbox[1]), txt_val, font=font, fill=(*rgb, alpha_byte))
-        canvas.alpha_composite(txt_im)
-        return True
-    except:
-        return False
 
 def get_video_duration(vpath):
     ff_cand = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'ffmpeg', 'ffmpeg.exe'))
@@ -801,22 +830,10 @@ def resolve_scene(cache_dir):
                 }
 
             model_cache = {}
-            has_puppet = False
             for o in objects:
                 iref = o.get('image', '')
                 if iref and iref not in model_cache:
-                    minfo = get_model_and_material_info(cache_dir, iref)
-                    model_cache[iref] = minfo
-                    if minfo['is_puppet'] and is_obj_visible(o):
-                        has_puppet = True
-
-            if has_puppet:
-                master_path, master_name = find_master_artwork(cache_dir, min_pixels=int(cw * ch * 0.65))
-                if master_path:
-                    im = Image.open(master_path).convert("RGB")
-                    im.save(final_output, quality=96)
-                    print(f"RESOLVED_MASTER_FOR_PUPPET: {master_name} -> {final_output} ({im.size[0]}x{im.size[1]})")
-                    return final_output
+                    model_cache[iref] = get_model_and_material_info(cache_dir, iref)
 
             cc_str = sdata.get('general', {}).get('clearcolor', '0.07 0.07 0.07')
             try:
@@ -834,7 +851,7 @@ def resolve_scene(cache_dir):
                 '赞助', 'donate', 'sponsor', 'qrcode', 'qr',
                 '开关', 'switch', 'button', 'btn', 'toggle',
                 'launcher', 'dock', 'appdock', 'widget', 'fps',
-                'bilibili', 'weibo', 'tiktok', 'qq', 'placeholder',
+                'bilibili', 'weibo', 'tiktok', 'qq',
                 'custom_user_texture', 'frame_builder',
                 '提示', '提示框', 'prompt', 'promptbox', 'notice',
                 '作者', '有话说', '说明', '教程', 'guide', 'help',
@@ -913,7 +930,7 @@ def resolve_scene(cache_dir):
                             lw = min(pup_im.size[0] - (lx - px), cw - lx)
                             lh = min(pup_im.size[1] - (ly - py), ch - ly)
                             if lw > 0 and lh > 0:
-                                canvas.alpha_composite(pup_im.crop((lx - px, ly - py, lx - px + lw, ly - py + lh)), (lx, ly))
+                                composite_layer(canvas, pup_im.crop((lx - px, ly - py, lx - px + lw, ly - py + lh)), lx, ly, minfo.get('blending', 'normal'), obj.get('colorBlendMode', 0))
                                 rendered_layers += 1
                     continue
 
@@ -1116,14 +1133,7 @@ def resolve_scene(cache_dir):
                         lh = min(layer_im.size[1] - (ly - y), ch - ly)
                         if lw > 0 and lh > 0:
                             crop_layer = layer_im.crop((lx - x, ly - y, lx - x + lw, ly - y + lh))
-                            if minfo['blending'] == 'additive':
-                                base_crop = canvas.crop((lx, ly, lx + lw, ly + lh))
-                                added = ImageChops.add(base_crop.convert("RGB"), crop_layer.convert("RGB"))
-                                base_alpha = base_crop.split()[3]
-                                added_rgba = Image.merge("RGBA", (*added.split(), base_alpha))
-                                canvas.paste(added_rgba, (lx, ly))
-                            else:
-                                canvas.alpha_composite(crop_layer, (lx, ly))
+                            composite_layer(canvas, crop_layer, lx, ly, minfo.get('blending', 'normal'), obj.get('colorBlendMode', 0))
                             rendered_layers += 1
                     except Exception as err:
                         print(f"[LayerCompositeError] {obj.get('name')}: {err}")
@@ -1175,7 +1185,7 @@ def resolve_scene(cache_dir):
 
     for x in sorted(imgs, key=lambda i: i['pixels'], reverse=True):
         bname = os.path.splitext(x['name'])[0].lower()
-        if any(k in bname for k in ('原', 'wallpaper', 'main', 'background', 'cover', 'full', 'base')) and x['is_opaque']:
+        if any(k in bname for k in ('原', 'wallpaper', 'main', 'background', 'cover', 'full', 'base', '图层 0', '图层0', 'layer 0', 'layer0', '拷贝', 'copy')) and x['is_opaque']:
             im = Image.open(x['path']).convert("RGB")
             im.save(final_output, quality=96)
             print(f"RESOLVED_ORIGINAL_IMAGE: {x['name']} -> {final_output} ({im.size[0]}x{im.size[1]})")
