@@ -334,15 +334,6 @@ function Extract-SceneWallpaper {
         return $resolvedJpg
     }
 
-    $fallbackImg = Get-ChildItem -Path $cacheDir -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
-        $_.Extension.ToLower() -in @(".png", ".jpg", ".jpeg", ".webp") -and
-        $_.Length -gt 20000 -and
-        $_.BaseName -notmatch "(?i)(mask|noise|particle|sprite|brush|distortion|normal|opacitymap|clipping|font|text_|_nrm)"
-    } | Sort-Object Length -Descending | Select-Object -First 1
-    if ($fallbackImg) {
-        return $fallbackImg.FullName
-    }
-
     return $null
 }
 
