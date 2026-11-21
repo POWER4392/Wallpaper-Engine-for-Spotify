@@ -1,11 +1,5 @@
-function Get-WallpaperEngineConfigPath {
-    $proc = Get-Process -Name "wallpaper64", "wallpaper32" -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($proc -and $proc.Path) {
-        $dir = Split-Path $proc.Path
-        $cfg = Join-Path $dir "config.json"
-        if (Test-Path $cfg) { return $cfg }
-    }
-
+function Get-SteamLibraryRoots {
+    $libs = New-Object System.Collections.Generic.List[string]
     $steamRoots = @()
     try {
         $sp1 = (Get-ItemProperty -Path "HKCU:\Software\Valve\Steam" -Name "SteamPath" -ErrorAction SilentlyContinue).SteamPath
@@ -17,17 +11,13 @@ function Get-WallpaperEngineConfigPath {
     } catch { $null = $_ }
 
     foreach ($steamPath in $steamRoots) {
-        $cfg = Join-Path $steamPath "steamapps\common\wallpaper_engine\config.json"
-        if (Test-Path $cfg) { return $cfg }
+        $libs.Add($steamPath)
         $vdf = Join-Path $steamPath "steamapps\libraryfolders.vdf"
         if (Test-Path $vdf) {
             try {
                 $vdfRaw = Get-Content $vdf -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-                $matches = [regex]::Matches($vdfRaw, '"path"\s+"([^"]+)"')
-                foreach ($m in $matches) {
-                    $libPath = $m.Groups[1].Value -replace '\\\\', '\'
-                    $libCfg = Join-Path $libPath "steamapps\common\wallpaper_engine\config.json"
-                    if (Test-Path $libCfg) { return $libCfg }
+                foreach ($m in [regex]::Matches($vdfRaw, '"path"\s+"([^"]+)"')) {
+                    $libs.Add(($m.Groups[1].Value -replace '\\\\', '\'))
                 }
             } catch { $null = $_ }
         }
@@ -35,15 +25,30 @@ function Get-WallpaperEngineConfigPath {
 
     $drives = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Root
     foreach ($d in $drives) {
-        $candidates = @(
-            (Join-Path $d "SteamLibrary\steamapps\common\wallpaper_engine\config.json"),
-            (Join-Path $d "Program Files (x86)\Steam\steamapps\common\wallpaper_engine\config.json"),
-            (Join-Path $d "Program Files\Steam\steamapps\common\wallpaper_engine\config.json"),
-            (Join-Path $d "Steam\steamapps\common\wallpaper_engine\config.json"),
-            (Join-Path $d "Games\steamapps\common\wallpaper_engine\config.json"),
-            (Join-Path $d "App\steamapps\common\wallpaper_engine\config.json")
-        )
-        foreach ($p in $candidates) {
+        foreach ($sub in @("SteamLibrary", "Program Files (x86)\Steam", "Program Files\Steam", "Steam", "SteamGames", "Games\Steam", "Games", "App")) {
+            $libs.Add((Join-Path $d $sub))
+        }
+    }
+    return ($libs | Where-Object { $_ } | Select-Object -Unique)
+}
+
+function Get-WallpaperEngineConfigPath {
+    $proc = Get-Process -Name "wallpaper64", "wallpaper32" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($proc -and $proc.Path) {
+        $dir = Split-Path $proc.Path
+        $cfg = Join-Path $dir "config.json"
+        if (Test-Path $cfg) { return $cfg }
+    }
+
+    foreach ($lib in (Get-SteamLibraryRoots)) {
+        $cfg = Join-Path $lib "steamapps\common\wallpaper_engine\config.json"
+        if (Test-Path $cfg) { return $cfg }
+    }
+
+    $drives = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Root
+    foreach ($d in $drives) {
+        foreach ($sub in @("wallpaper_engine\config.json", "Wallpaper Engine\config.json")) {
+            $p = Join-Path $d $sub
             if (Test-Path $p) { return $p }
         }
     }
@@ -104,8 +109,27 @@ function Get-CurrentWallpaperInfo {
         }
         if (-not $monTarget -or -not $monTarget.file) { return $null }
 
-        $filePath = $monTarget.file
+        $filePath = ($monTarget.file -replace '/', '\')
+        $weDir = [System.IO.Path]::GetDirectoryName($configPath)
+        if ($filePath -and -not [System.IO.Path]::IsPathRooted($filePath) -and $weDir) {
+            $filePath = Join-Path $weDir $filePath
+        }
         $folder = [System.IO.Path]::GetDirectoryName($filePath)
+        if ((-not $filePath -or (-not [System.IO.File]::Exists($filePath) -and -not [System.IO.Directory]::Exists($folder))) -and $monTarget.file -match '431960[\\/]+(\d+)') {
+            $wsId = $Matches[1]
+            $leaf = [System.IO.Path]::GetFileName($filePath)
+            $libCandidates = @()
+            if ($weDir) { $libCandidates += (Join-Path $weDir "..\..\..") }
+            $libCandidates += @(Get-SteamLibraryRoots)
+            foreach ($lib in ($libCandidates | Select-Object -Unique)) {
+                $candDir = Join-Path $lib "steamapps\workshop\content\431960\$wsId"
+                if ([System.IO.Directory]::Exists($candDir)) {
+                    $folder = $candDir
+                    if ($leaf) { $filePath = Join-Path $candDir $leaf }
+                    break
+                }
+            }
+        }
 
         $title = "Wallpaper Engine"
         $depId = $null

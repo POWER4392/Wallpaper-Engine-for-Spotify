@@ -50,7 +50,38 @@ if (Test-Path (Join-Path $localRepoRoot "scripts\sync\sync-wallpaper.ps1")) {
     }
 }
 
-Write-Host "[2/2] Dang ky tu dong chay ngam cung Windows..." -ForegroundColor Yellow
+Write-Host "[2/3] Kiem tra FFmpeg..." -ForegroundColor Yellow
+$ffmpegExe = Join-Path $targetDir "tools\ffmpeg\ffmpeg.exe"
+$sysFfmpeg = Get-Command "ffmpeg" -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not (Test-Path $ffmpegExe) -and -not ($sysFfmpeg -and $sysFfmpeg.Source)) {
+    Write-Host "  Dang tai FFmpeg (~114MB) de ho tro chuyen doi video .mp4..." -ForegroundColor Yellow
+    $ffZip = "$env:TEMP\ffmpeg-essentials.zip"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $ffZip -UseBasicParsing
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zipArch = [System.IO.Compression.ZipFile]::OpenRead($ffZip)
+        try {
+            $ffEntry = $zipArch.Entries | Where-Object { $_.FullName -like "*/bin/ffmpeg.exe" } | Select-Object -First 1
+            if ($ffEntry) {
+                $ffDir = Split-Path -Parent $ffmpegExe
+                if (-not (Test-Path $ffDir)) { New-Item -ItemType Directory -Path $ffDir -Force | Out-Null }
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($ffEntry, $ffmpegExe, $true)
+                Write-Host "  [OK] Da tai FFmpeg vao: $ffmpegExe" -ForegroundColor Green
+            }
+        } finally {
+            $zipArch.Dispose()
+        }
+        if (Test-Path $ffZip) { Remove-Item -Path $ffZip -Force }
+    } catch {
+        Write-Host "  [!] Khong tai duoc FFmpeg (van chay duoc anh/scene tinh): $($_.Exception.Message)" -ForegroundColor Yellow
+        if (Test-Path $ffZip) { Remove-Item -Path $ffZip -Force }
+    }
+} else {
+    Write-Host "  [OK] Da co san FFmpeg." -ForegroundColor Green
+}
+
+Write-Host "[3/3] Dang ky tu dong chay ngam cung Windows..." -ForegroundColor Yellow
 try {
     $wsh = New-Object -ComObject WScript.Shell
     $startupLnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\SpotifyWallpaperWatcher.lnk"
