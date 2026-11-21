@@ -7,15 +7,12 @@ Write-Host "============================================================" -Foreg
 
 $targetDir = "$env:LOCALAPPDATA\SpotifyWallpaperEngine"
 
-$scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { $PWD.Path }
-$localRepoRoot = Split-Path -Parent (Split-Path -Parent $scriptRoot)
+$scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { "" }
+$localRepoRoot = if ($scriptRoot) { Split-Path -Parent (Split-Path -Parent $scriptRoot) } else { "" }
 
-if (Test-Path (Join-Path $localRepoRoot "scripts\sync\sync-wallpaper.ps1")) {
-    Write-Host "[1/2] Phat hien thu muc du an goc, su dung truc tiep..." -ForegroundColor Green
+if ($localRepoRoot -and (Test-Path (Join-Path $localRepoRoot "scripts\sync\sync-wallpaper.ps1"))) {
+    Write-Host "[1/4] Phat hien thu muc du an goc, su dung truc tiep..." -ForegroundColor Green
     $targetDir = $localRepoRoot
-} elseif (Test-Path "e:\Mod\spotify-wallpaper\scripts\sync\sync-wallpaper.ps1") {
-    Write-Host "[1/2] Phat hien thu muc du an goc (e:\Mod\spotify-wallpaper), su dung truc tiep..." -ForegroundColor Green
-    $targetDir = "e:\Mod\spotify-wallpaper"
 } else {
     Write-Host "[1/2] Dang tai bo ket noi tu GitHub ve may..." -ForegroundColor Yellow
     if (-not (Test-Path $targetDir)) {

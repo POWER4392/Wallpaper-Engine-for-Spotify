@@ -26,11 +26,28 @@ function Start-SyncHttpServer {
     $mySessionId = (Get-Process -Id $PID).SessionId
     $sawSpotify = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySessionId })
     $spotifyLastSeen = if ($sawSpotify) { Get-Date } else { [DateTime]::MinValue }
+    $modulesDir = Join-Path $ProjectRoot "scripts\sync\modules"
+    $extModPath = Join-Path $modulesDir "WallpaperExtractors.psm1"
+    $cfgModPath = Join-Path $modulesDir "WallpaperConfig.psm1"
+    $lastModStamp = ""
+    if ((Test-Path $extModPath) -and (Test-Path $cfgModPath)) {
+        $lastModStamp = "$(([System.IO.FileInfo]$extModPath).LastWriteTimeUtc.Ticks)_$(([System.IO.FileInfo]$cfgModPath).LastWriteTimeUtc.Ticks)"
+    }
 
     while ($listener.IsListening) {
         try {
             $contextTask = $listener.GetContextAsync()
             while (-not $contextTask.AsyncWaitHandle.WaitOne(1500)) {
+                if ((Test-Path $extModPath) -and (Test-Path $cfgModPath)) {
+                    $curStamp = "$(([System.IO.FileInfo]$extModPath).LastWriteTimeUtc.Ticks)_$(([System.IO.FileInfo]$cfgModPath).LastWriteTimeUtc.Ticks)"
+                    if ($curStamp -ne $lastModStamp) {
+                        $lastModStamp = $curStamp
+                        try {
+                            Import-Module $extModPath -Force -Global
+                            Import-Module $cfgModPath -Force -Global
+                        } catch { $null = $_ }
+                    }
+                }
                 $spRunning = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySessionId })
                 if ($spRunning) {
                     $sawSpotify = $true
