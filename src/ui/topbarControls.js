@@ -174,6 +174,14 @@ export function setupSidebarControls() {
     }
 
     function createOrUpdateSidebarBtn() {
+        document.querySelectorAll('#global-nav-bar .custom-navlink, .Root__globalNav .custom-navlink').forEach((el) => {
+            const label = (el.getAttribute("aria-label") || el.getAttribute("title") || "").toLowerCase();
+            const html = el.innerHTML || "";
+            if (label.includes("marketplace") || html.includes("151.909 72.923") || html.includes("76.465 68.262")) {
+                el.setAttribute("data-we-hidden-marketplace", "true");
+            }
+        });
+
         const target = getSidebarTarget();
         if (!target || !target.container) return;
 
@@ -186,7 +194,7 @@ export function setupSidebarControls() {
             btn.setAttribute("aria-label", "Marketplace");
             btn.innerHTML = `
                 <svg viewBox="0 0 76.465 68.262">
-                    <path d="M151.909 72.923v6.5h10.097l8.663 44.567h48.968v-6.5h-43.61l-1.2-6.172h42.974l10.35-33.91h-59.915l-.872-4.485H151.91zm17.59 10.984h49.867l-6.393 20.91h-39.409l-4.064-20.91zm5.626 44.11a6.5 6.5 0 0 0-6.5 6.5 6.5 0 0 0 6.5 6.501 6.5 6.5 0 0 0 6.5-6.5 6.5 6.5 0 0 0-6.5-6.5zm38.274 0a6.5 6.5 0 0 0-6.5 6.5 6.5 0 0 0 6.5 6.501 6.5 6.5 0 0 0 6.5-6.5 6.5 6.5 0 0 0-6.5-6.5z" transform="translate(-151.909 -72.923)"/>
+                    <path d="M151.909 72.923v6.5h10.097l8.663 44.567h48.968v-6.5h-43.61l-1.2-6.172h42.974l10.35-33.91h-59.915l-.872-4.485H151.91zm17.59 10.984h49.867l-6.393 20.91h-39.409l-4.064-20.91z" transform="translate(-151.909 -72.923)"/><circle cx="23.216" cy="61.594" r="6.5"/><circle cx="61.49" cy="61.594" r="6.5"/>
                 </svg>
             `;
             btn.onclick = (e) => {
@@ -251,22 +259,17 @@ export function setupUI() {
         }
     });
 
-    if (!document.getElementById("we-float-btn")) {
-        const btn = document.createElement("button");
-        btn.id = "we-float-btn";
-        btn.title = "Wallpaper Settings (Ctrl+Shift+W)";
-        btn.innerHTML = `<span>Wallpaper</span>`;
-        btn.onclick = openModal;
-        document.body.appendChild(btn);
-    }
-
     setupTopBarControls();
     setupSidebarControls();
 
-    document.addEventListener("dragover", (e) => { e.preventDefault(); });
+    document.addEventListener("dragover", (e) => {
+        if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+            e.preventDefault();
+        }
+    });
     document.addEventListener("drop", (e) => {
-        e.preventDefault();
         if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            e.preventDefault();
             const file = e.dataTransfer.files[0];
             const isMedia = file.type.startsWith("image/") || file.type.startsWith("video/") || file.name.match(/\.(jpg|jpeg|png|webp|gif|mp4|webm|mov|mkv)$/i);
             if (isMedia) {

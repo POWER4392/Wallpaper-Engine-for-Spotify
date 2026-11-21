@@ -23,9 +23,25 @@ function Start-SyncHttpServer {
         return
     }
 
+    $sawSpotify = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue)
+    $spotifyLastSeen = if ($sawSpotify) { Get-Date } else { [DateTime]::MinValue }
+
     while ($listener.IsListening) {
         try {
-            $context = $listener.GetContext()
+            $contextTask = $listener.GetContextAsync()
+            while (-not $contextTask.AsyncWaitHandle.WaitOne(1500)) {
+                $spRunning = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue)
+                if ($spRunning) {
+                    $sawSpotify = $true
+                    $spotifyLastSeen = Get-Date
+                } elseif ($sawSpotify -and (((Get-Date) - $spotifyLastSeen).TotalSeconds -ge 4)) {
+                    Write-Host "Spotify closed completely. Stopping Sync Bridge..." -ForegroundColor Yellow
+                    try { $listener.Stop() } catch { $null = $_ }
+                    try { $listener.Close() } catch { $null = $_ }
+                    return
+                }
+            }
+            $context = $contextTask.GetAwaiter().GetResult()
             $req = $context.Request
             $res = $context.Response
 

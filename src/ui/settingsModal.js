@@ -472,7 +472,7 @@ if exist "e:\\Mod\\spotify-wallpaper\\scripts\\setup\\install-bridge.ps1" (
 )
 
 echo Downloading and configuring background bridge from GitHub...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/POWER4392/Spotify---Wallpaper-Engine/main/scripts/setup/install-bridge.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/POWER4392/Wallpaper-Engine-for-Spotify/main/scripts/setup/install-bridge.ps1 | iex"
 echo.
 pause
 `;
@@ -504,7 +504,7 @@ pause
                     e.preventDefault();
                     e.stopPropagation();
                 }
-                const cmd = 'powershell -WindowStyle Hidden -Command "iwr -useb https://raw.githubusercontent.com/POWER4392/Spotify---Wallpaper-Engine/main/scripts/setup/install-bridge.ps1 | iex"';
+                const cmd = 'powershell -WindowStyle Hidden -Command "iwr -useb https://raw.githubusercontent.com/POWER4392/Wallpaper-Engine-for-Spotify/main/scripts/setup/install-bridge.ps1 | iex"';
                 
                 let copied = false;
                 if (navigator.clipboard && navigator.clipboard.writeText) {

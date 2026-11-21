@@ -114,7 +114,10 @@ export function setupOfflineHandler() {
         if (typeof Spicetify.showNotification === "function" && !Spicetify.showNotification._weWrapped) {
             const origShow = Spicetify.showNotification.bind(Spicetify);
             const wrappedShow = (message, isError = false, msTimeout) => {
-                const key = typeof message === "string" ? message.trim() : String(message?.props?.children || message);
+                if (typeof message !== "string") {
+                    return origShow(message, isError, msTimeout);
+                }
+                const key = message.trim();
                 const now = Date.now();
                 const lastTime = recentNotifications.get(key) || 0;
                 if (key && now - lastTime < 5000) {
@@ -130,7 +133,10 @@ export function setupOfflineHandler() {
         if (Spicetify.Snackbar && typeof Spicetify.Snackbar.enqueueSnackbar === "function" && !Spicetify.Snackbar.enqueueSnackbar._weWrapped) {
             const origEnqueue = Spicetify.Snackbar.enqueueSnackbar.bind(Spicetify.Snackbar);
             const wrappedEnqueue = (message, options) => {
-                const key = typeof message === "string" ? message.trim() : String(message?.props?.children || "");
+                if (typeof message !== "string") {
+                    return origEnqueue(message, options);
+                }
+                const key = message.trim();
                 const now = Date.now();
                 const lastTime = recentNotifications.get(key) || 0;
                 if (key && now - lastTime < 5000) {

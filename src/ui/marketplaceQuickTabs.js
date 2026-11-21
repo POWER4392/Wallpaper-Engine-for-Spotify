@@ -39,13 +39,23 @@ export function setupMarketplaceQuickTabs() {
 
             const moreControl = nativeTabBar.querySelector(".Dropdown-control");
             if (moreControl) {
+                moreControl.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
                 moreControl.click();
-                setTimeout(() => {
-                    const option = Array.from(document.querySelectorAll(".Dropdown-option")).find(
+                let tries = 0;
+                const tryPickOption = () => {
+                    const option = Array.from(nativeTabBar.querySelectorAll(".Dropdown-option")).concat(
+                        Array.from(document.querySelectorAll(".Dropdown-menu .Dropdown-option"))
+                    ).find(
                         opt => (opt.textContent || "").trim().toLowerCase() === tabId.toLowerCase()
                     );
-                    if (option) option.click();
-                }, 10);
+                    if (option) {
+                        option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+                        option.click();
+                    } else if (++tries < 6) {
+                        setTimeout(tryPickOption, 30);
+                    }
+                };
+                setTimeout(tryPickOption, 20);
                 return;
             }
         }
@@ -66,13 +76,13 @@ export function setupMarketplaceQuickTabs() {
         if (nativeTabBar) {
             nativeTabBar.classList.add("we-hidden-bridge");
             nativeTabBar.style.setProperty("position", "fixed", "important");
-            nativeTabBar.style.setProperty("top", "0", "important");
-            nativeTabBar.style.setProperty("left", "0", "important");
+            nativeTabBar.style.setProperty("top", "-9999px", "important");
+            nativeTabBar.style.setProperty("left", "-9999px", "important");
             nativeTabBar.style.setProperty("opacity", "0", "important");
             nativeTabBar.style.setProperty("pointer-events", "none", "important");
-            nativeTabBar.style.setProperty("width", "0px", "important");
-            nativeTabBar.style.setProperty("height", "0px", "important");
-            nativeTabBar.style.setProperty("overflow", "hidden", "important");
+            nativeTabBar.style.setProperty("width", "900px", "important");
+            nativeTabBar.style.setProperty("height", "48px", "important");
+            nativeTabBar.style.setProperty("overflow", "visible", "important");
             nativeTabBar.style.setProperty("z-index", "-9999", "important");
         }
 

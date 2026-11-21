@@ -22,24 +22,31 @@ if (Test-Path (Join-Path $localRepoRoot "scripts\sync\sync-wallpaper.ps1")) {
         New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
     }
 
-    $zipUrl = "https://github.com/POWER4392/Spotify---Wallpaper-Engine/archive/refs/heads/main.zip"
+    $zipUrl = "https://github.com/POWER4392/Wallpaper-Engine-for-Spotify/archive/refs/heads/main.zip"
     $zipPath = "$env:TEMP\spotify-we-main.zip"
     $extractTemp = "$env:TEMP\spotify-we-extract"
 
     try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
         if (Test-Path $extractTemp) { Remove-Item -Path $extractTemp -Recurse -Force }
         Expand-Archive -Path $zipPath -DestinationPath $extractTemp -Force
-        $sourceDir = Join-Path $extractTemp "Spotify---Wallpaper-Engine-main"
+        $extractedDir = Get-ChildItem -Path $extractTemp -Directory | Select-Object -First 1
+        if (-not $extractedDir) { throw "Khong tim thay thu muc giai nen tu GitHub." }
+        $sourceDir = $extractedDir.FullName
 
         Copy-Item -Path (Join-Path $sourceDir "scripts") -Destination $targetDir -Recurse -Force
         Copy-Item -Path (Join-Path $sourceDir "tools") -Destination $targetDir -Recurse -Force
 
         Remove-Item -Path $zipPath -Force
         Remove-Item -Path $extractTemp -Recurse -Force
+        if (-not (Test-Path (Join-Path $targetDir "scripts\sync\sync-wallpaper.ps1"))) {
+            throw "Thieu file sync-wallpaper.ps1 sau khi copy."
+        }
         Write-Host "  [OK] Da cai dat thanh cong vao: $targetDir" -ForegroundColor Green
     } catch {
         Write-Host "  [!] Loi tai online: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
     }
 }
 
