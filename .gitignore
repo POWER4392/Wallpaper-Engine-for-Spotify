@@ -8,6 +8,7 @@ Thumbs.db
 .agent/
 .agents/
 tools/ffmpeg/*.exe
+tools/python/
 start-sync.bat
 __pycache__/
 *.pyc

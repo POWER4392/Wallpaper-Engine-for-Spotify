@@ -1,4 +1,4 @@
-function Get-RePkgPath {
+﻿function Get-RePkgPath {
     param([string]$projectRoot)
     $p = Join-Path $projectRoot "tools\repkg\RePKG.exe"
     if ([System.IO.File]::Exists($p)) { return $p }
@@ -276,8 +276,13 @@ function Extract-SceneWallpaper {
     $pkgMp4 = $null
     if ([System.IO.File]::Exists($compScript) -and -not ([System.IO.File]::Exists($resolvedJpg) -and ([System.IO.FileInfo]$resolvedJpg).Length -gt 2000 -and ([System.IO.FileInfo]$resolvedJpg).LastWriteTimeUtc -ge ([System.IO.FileInfo]$compScript).LastWriteTimeUtc)) {
         try {
-            $pyCmd = (Get-Command 'py', 'python' -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } | Select-Object -First 1).Source
-            if (-not $pyCmd) { $pyCmd = "python" }
+            $embeddedPy = Join-Path $projectRoot "tools\python\python.exe"
+            if ([System.IO.File]::Exists($embeddedPy)) {
+                $pyCmd = $embeddedPy
+            } else {
+                $pyCmd = (Get-Command 'py', 'python' -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } | Select-Object -First 1).Source
+                if (-not $pyCmd) { $pyCmd = "python" }
+            }
 
             $pinfo = New-Object System.Diagnostics.ProcessStartInfo
             $pinfo.FileName = $pyCmd
@@ -285,7 +290,7 @@ function Extract-SceneWallpaper {
             $pinfo.UseShellExecute = $false
             $pinfo.CreateNoWindow = $true
             $proc = [System.Diagnostics.Process]::Start($pinfo)
-            $proc.WaitForExit(30000) | Out-Null
+            $proc.WaitForExit(60000) | Out-Null
             if ([System.IO.File]::Exists($resolvedJpg) -and ([System.IO.FileInfo]$resolvedJpg).Length -gt 2000) {
                 Write-Host " [Compositor] Ready complete background: $workshopId" -ForegroundColor Green
             }

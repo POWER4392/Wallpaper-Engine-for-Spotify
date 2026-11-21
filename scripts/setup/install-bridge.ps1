@@ -81,7 +81,63 @@ if (-not (Test-Path $ffmpegExe) -and -not ($sysFfmpeg -and $sysFfmpeg.Source)) {
     Write-Host "  [OK] Da co san FFmpeg." -ForegroundColor Green
 }
 
-Write-Host "[3/3] Dang ky tu dong chay ngam cung Windows..." -ForegroundColor Yellow
+Write-Host "[3/4] Kiem tra Python (Pillow & NumPy) de ghep scene .pkg..." -ForegroundColor Yellow
+$embPyDir = Join-Path $targetDir "tools\python"
+$embPyExe = Join-Path $embPyDir "python.exe"
+$hasReadyPy = $false
+if (Test-Path $embPyExe) {
+    & $embPyExe -c "import PIL, numpy" 2>$null
+    if ($LASTEXITCODE -eq 0) { $hasReadyPy = $true }
+}
+if (-not $hasReadyPy) {
+    $sysPy = (Get-Command 'py', 'python' -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } | Select-Object -First 1).Source
+    if ($sysPy) {
+        & $sysPy -c "import PIL, numpy" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $hasReadyPy = $true
+        } else {
+            Write-Host "  Dang cai pillow & numpy cho Python..." -ForegroundColor Yellow
+            & $sysPy -m pip install --quiet --no-warn-script-location pillow numpy 2>$null
+            & $sysPy -c "import PIL, numpy" 2>$null
+            if ($LASTEXITCODE -eq 0) { $hasReadyPy = $true }
+        }
+    }
+}
+if (-not $hasReadyPy) {
+    Write-Host "  Dang tai Python Embeddable + Pillow/NumPy (~35MB)..." -ForegroundColor Yellow
+    $pyZip = "$env:TEMP\python-embed.zip"
+    $getPip = "$env:TEMP\get-pip.py"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip" -OutFile $pyZip -UseBasicParsing
+        if (-not (Test-Path $embPyDir)) { New-Item -ItemType Directory -Path $embPyDir -Force | Out-Null }
+        Expand-Archive -Path $pyZip -DestinationPath $embPyDir -Force
+        $pthFile = Get-ChildItem -Path $embPyDir -Filter "python*._pth" | Select-Object -First 1
+        if ($pthFile) {
+            $pthText = Get-Content $pthFile.FullName -Raw
+            $pthText = $pthText -replace '#import site', 'import site'
+            Set-Content -Path $pthFile.FullName -Value $pthText -Encoding ASCII
+        }
+        Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip -UseBasicParsing
+        & $embPyExe $getPip --no-warn-script-location --quiet
+        & $embPyExe -m pip install --no-warn-script-location --quiet pillow numpy
+        & $embPyExe -c "import PIL, numpy" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  [OK] Da cai dat xong Python + Pillow/NumPy vao: $embPyDir" -ForegroundColor Green
+        } else {
+            Write-Host "  [!] Cai Python hoan tat nhung thieu thu vien PIL/numpy." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "  [!] Khong tai duoc Python (van chay duoc video/anh): $($_.Exception.Message)" -ForegroundColor Yellow
+    } finally {
+        if (Test-Path $pyZip) { Remove-Item -Path $pyZip -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $getPip) { Remove-Item -Path $getPip -Force -ErrorAction SilentlyContinue }
+    }
+} else {
+    Write-Host "  [OK] Da co san Python + Pillow/NumPy." -ForegroundColor Green
+}
+
+Write-Host "[4/4] Dang ky tu dong chay ngam cung Windows..." -ForegroundColor Yellow
 try {
     $wsh = New-Object -ComObject WScript.Shell
     $startupLnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\SpotifyWallpaperWatcher.lnk"
