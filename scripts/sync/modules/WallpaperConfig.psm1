@@ -6,14 +6,32 @@ function Get-WallpaperEngineConfigPath {
         if (Test-Path $cfg) { return $cfg }
     }
 
+    $steamRoots = @()
     try {
-        $steamPath = (Get-ItemProperty -Path "HKCU:\Software\Valve\Steam" -Name "SteamPath" -ErrorAction SilentlyContinue).SteamPath
-        if ($steamPath) {
-            $cfg = Join-Path $steamPath "steamapps\common\wallpaper_engine\config.json"
-            if (Test-Path $cfg) { return $cfg }
+        $sp1 = (Get-ItemProperty -Path "HKCU:\Software\Valve\Steam" -Name "SteamPath" -ErrorAction SilentlyContinue).SteamPath
+        if ($sp1) { $steamRoots += $sp1 }
+    } catch { $null = $_ }
+    try {
+        $sp2 = (Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam" -Name "InstallPath" -ErrorAction SilentlyContinue).InstallPath
+        if ($sp2) { $steamRoots += $sp2 }
+    } catch { $null = $_ }
+
+    foreach ($steamPath in $steamRoots) {
+        $cfg = Join-Path $steamPath "steamapps\common\wallpaper_engine\config.json"
+        if (Test-Path $cfg) { return $cfg }
+        $vdf = Join-Path $steamPath "steamapps\libraryfolders.vdf"
+        if (Test-Path $vdf) {
+            try {
+                $vdfRaw = Get-Content $vdf -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+                $matches = [regex]::Matches($vdfRaw, '"path"\s+"([^"]+)"')
+                foreach ($m in $matches) {
+                    $libPath = $m.Groups[1].Value -replace '\\\\', '\'
+                    $libCfg = Join-Path $libPath "steamapps\common\wallpaper_engine\config.json"
+                    if (Test-Path $libCfg) { return $libCfg }
+                }
+            } catch { $null = $_ }
         }
     }
-    catch { $null = $_ }
 
     $drives = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Root
     foreach ($d in $drives) {
@@ -56,9 +74,14 @@ function Get-CurrentWallpaperInfo {
 
         $userProps = $json.PSObject.Properties | Where-Object { $_.Name -notin @("?installdirectory", "general") }
         if (-not $userProps) { return $null }
-        $userObj = $userProps[0].Value
 
-        $wpConfig = $userObj.general.wallpaperconfig
+        $wpConfig = $null
+        foreach ($up in $userProps) {
+            if ($up.Value -and $up.Value.general -and $up.Value.general.wallpaperconfig -and $up.Value.general.wallpaperconfig.selectedwallpapers) {
+                $wpConfig = $up.Value.general.wallpaperconfig
+                break
+            }
+        }
         if (-not $wpConfig) { return $null }
 
         $monTarget = $null
@@ -70,6 +93,14 @@ function Get-CurrentWallpaperInfo {
         }
         if (-not $monTarget -or -not $monTarget.file) {
             $monTarget = $wpConfig.selectedwallpapers.Monitor1
+        }
+        if (-not $monTarget -or -not $monTarget.file) {
+            foreach ($mp in $wpConfig.selectedwallpapers.PSObject.Properties) {
+                if ($mp.Value -and $mp.Value.file) {
+                    $monTarget = $mp.Value
+                    break
+                }
+            }
         }
         if (-not $monTarget -or -not $monTarget.file) { return $null }
 
@@ -153,10 +184,20 @@ function Get-CurrentWallpaperInfo {
             }
         }
 
+        if (-not $targetMedia -and [System.IO.Directory]::Exists($folder)) {
+            $previewFallback = [System.IO.Directory]::GetFiles($folder, "preview.*", [System.IO.SearchOption]::TopDirectoryOnly) | Where-Object {
+                [System.IO.Path]::GetExtension($_).ToLower() -in @(".jpg", ".jpeg", ".png", ".webp")
+            } | Select-Object -First 1
+            if ($previewFallback) { $targetMedia = $previewFallback }
+        }
+
         if (-not $targetMedia) { return $null }
 
         $mediaType = switch ([System.IO.Path]::GetExtension($targetMedia).ToLower()) {
             ".webm" { "video/webm" }
+            ".mp4" { "video/mp4" }
+            ".m4v" { "video/mp4" }
+            ".mov" { "video/mp4" }
             ".png" { "image/png" }
             ".webp" { "image/webp" }
             default { "image/jpeg" }
