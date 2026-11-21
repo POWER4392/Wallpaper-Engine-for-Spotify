@@ -434,8 +434,35 @@ export function openModal() {
             dialog.querySelector("#we-dialog-close").onclick = closeDialog;
             dialog.querySelector("#we-dialog-cancel").onclick = closeDialog;
             dialog.querySelector("#we-dialog-proceed").onclick = () => {
-                closeDialog();
                 onConfirm();
+                const box = dialog.firstElementChild;
+                if (box) {
+                    box.innerHTML = `
+                        <div style="font-size:15px; font-weight:700; color:#1ed760; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>Setup Command Ready & Copied!</span>
+                            <button id="we-dialog-done-close" style="background:transparent; border:none; color:#888; font-size:20px; cursor:pointer; line-height:1; padding:0 4px;">&times;</button>
+                        </div>
+                        <p style="font-size:12px; color:#ddd; line-height:1.55; margin:0 0 12px 0;">
+                            Spotify's built-in browser often blocks direct <code>.bat</code> file downloads. The setup command has been <b>automatically copied to your clipboard</b>:
+                        </p>
+                        <div style="background:rgba(30,215,96,0.08); border:1px solid rgba(30,215,96,0.3); border-radius:8px; padding:12px; margin-bottom:14px; font-size:12px; line-height:1.7; color:#fff;">
+                            <div><b>1.</b> Press <b>Win + R</b> on your keyboard (or open <b>PowerShell</b>).</div>
+                            <div><b>2.</b> Press <b>Ctrl + V</b> to paste the command.</div>
+                            <div><b>3.</b> Press <b>Enter</b> and wait for setup to complete.</div>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end;">
+                            <button id="we-dialog-done-ok" style="background:#1ed760; color:#000; border:none; border-radius:20px; padding:7px 20px; font-weight:700; font-size:12px; cursor:pointer;">
+                                Got It
+                            </button>
+                        </div>
+                    `;
+                    const c1 = box.querySelector("#we-dialog-done-close");
+                    const c2 = box.querySelector("#we-dialog-done-ok");
+                    if (c1) c1.onclick = closeDialog;
+                    if (c2) c2.onclick = closeDialog;
+                } else {
+                    closeDialog();
+                }
             };
             dialog.onclick = (e) => {
                 if (e.target === dialog) closeDialog();
@@ -465,28 +492,48 @@ if exist "%~dp0scripts\\setup\\setup-autostart.ps1" (
     exit /b
 )
 
-if exist "e:\\Mod\\spotify-wallpaper\\scripts\\setup\\install-bridge.ps1" (
-    powershell -NoProfile -ExecutionPolicy Bypass -File "e:\\Mod\\spotify-wallpaper\\scripts\\setup\\install-bridge.ps1"
-    pause
-    exit /b
-)
-
 echo Downloading and configuring background bridge from GitHub...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/POWER4392/Wallpaper-Engine-for-Spotify/main/scripts/setup/install-bridge.ps1 | iex"
 echo.
 pause
 `;
-            const blob = new Blob([batScript], { type: "text/plain" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "Activate-Spotify-Wallpaper-Sync.bat";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -useb https://raw.githubusercontent.com/POWER4392/Wallpaper-Engine-for-Spotify/main/scripts/setup/install-bridge.ps1 | iex"';
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(cmd).catch(() => {});
+            }
+            try {
+                const ta = document.createElement("textarea");
+                ta.value = cmd;
+                ta.style.position = "fixed";
+                ta.style.top = "-9999px";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+            } catch (_) {}
+
+            try {
+                const blob = new Blob([batScript], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "Activate-Spotify-Wallpaper-Sync.bat";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
+            } catch (_) {}
+
+            if (btnDownloadActivator) {
+                btnDownloadActivator.textContent = "Copied! Press Win+R -> Ctrl+V";
+                setTimeout(() => {
+                    btnDownloadActivator.textContent = "Download 1-Click Activator";
+                }, 4000);
+            }
             if (window.Spicetify && Spicetify.showNotification) {
-                Spicetify.showNotification("Activator downloaded! Run the file to complete background setup.");
+                Spicetify.showNotification("Setup command copied! Press Win+R, paste (Ctrl+V), and press Enter.");
             }
         };
 
