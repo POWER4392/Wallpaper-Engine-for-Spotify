@@ -7,6 +7,10 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
 } | ForEach-Object {
     try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch { $null = $_ }
 }
+try {
+    $null = Invoke-WebRequest -Uri "http://127.0.0.1:43196/shutdown" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 400
+} catch { $null = $_ }
 
 $projectRoot = (Get-Item "$PSScriptRoot\..\..").FullName
 if (-not $projectRoot) { $projectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent }

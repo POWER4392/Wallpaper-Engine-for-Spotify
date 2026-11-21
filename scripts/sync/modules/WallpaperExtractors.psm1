@@ -136,7 +136,7 @@ function Extract-VideoWallpaper {
     $workshopId = [System.IO.Path]::GetFileName($folder)
     if (-not $workshopId -or $workshopId -eq "") { $workshopId = "default" }
 
-    $cacheRoot = Join-Path $env:TEMP "we_cache"
+    $cacheRoot = if ($env:PUBLIC) { Join-Path $env:PUBLIC "SpotifyWallpaperCache" } else { Join-Path $env:TEMP "we_cache" }
     $cacheDir  = Join-Path $cacheRoot $workshopId
     if (-not [System.IO.Directory]::Exists($cacheDir)) {
         [System.IO.Directory]::CreateDirectory($cacheDir) | Out-Null
@@ -221,7 +221,7 @@ function Extract-SceneWallpaper {
     $workshopId = [System.IO.Path]::GetFileName($folder)
     if (-not $workshopId -or $workshopId -eq "") { $workshopId = "default" }
 
-    $cacheRoot = Join-Path $env:TEMP "we_cache"
+    $cacheRoot = if ($env:PUBLIC) { Join-Path $env:PUBLIC "SpotifyWallpaperCache" } else { Join-Path $env:TEMP "we_cache" }
     $cacheDir  = Join-Path $cacheRoot $workshopId
     if (-not [System.IO.Directory]::Exists($cacheDir)) {
         [System.IO.Directory]::CreateDirectory($cacheDir) | Out-Null

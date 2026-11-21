@@ -68,13 +68,25 @@ function Start-SyncHttpServer {
                 continue
             }
 
+            if ($path -eq "/shutdown") {
+                $msg = [System.Text.Encoding]::UTF8.GetBytes("SHUTTING_DOWN")
+                $res.ContentType = "text/plain"
+                $res.StatusCode = 200
+                $res.ContentLength64 = $msg.Length
+                try { $res.OutputStream.Write($msg, 0, $msg.Length) } catch { $null = $_ }
+                try { $res.Close() } catch { $null = $_ }
+                try { $listener.Stop() } catch { $null = $_ }
+                try { $listener.Close() } catch { $null = $_ }
+                return
+            }
+
             $reqMon = $req.QueryString["monitor"]
             $info = Get-CurrentWallpaperInfo -projectRoot $ProjectRoot -TargetMonitor $reqMon
+            $cacheRoot = if ($env:PUBLIC) { Join-Path $env:PUBLIC "SpotifyWallpaperCache" } else { Join-Path $env:TEMP "we_cache" }
 
             if ($path -eq "/api/current") {
                 if ($info) {
                     $ver = if ($info.Version) { $info.Version } else { 0 }
-                    $cacheRoot = Join-Path $env:TEMP "we_cache"
                     $cacheFolder = Join-Path $cacheRoot $info.Id
                     $posterName = $null
                     if (Test-Path $cacheFolder) {
@@ -141,7 +153,7 @@ function Start-SyncHttpServer {
                 $qId = $req.QueryString["id"]
                 $qF = $req.QueryString["f"]
                 if (-not $qF) { $qF = "resolved_wallpaper.jpg" }
-                $posterPath = Join-Path $env:TEMP "we_cache\$qId\$qF"
+                $posterPath = Join-Path $cacheRoot "$qId\$qF"
                 if (Test-Path $posterPath) {
                     $pItem = [System.IO.FileInfo]$posterPath
                     $res.ContentType = if ($pItem.Extension -ieq ".png") { "image/png" } else { "image/jpeg" }
