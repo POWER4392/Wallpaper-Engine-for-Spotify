@@ -23,14 +23,15 @@ function Start-SyncHttpServer {
         return
     }
 
-    $sawSpotify = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue)
+    $mySessionId = (Get-Process -Id $PID).SessionId
+    $sawSpotify = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySessionId })
     $spotifyLastSeen = if ($sawSpotify) { Get-Date } else { [DateTime]::MinValue }
 
     while ($listener.IsListening) {
         try {
             $contextTask = $listener.GetContextAsync()
             while (-not $contextTask.AsyncWaitHandle.WaitOne(1500)) {
-                $spRunning = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue)
+                $spRunning = [bool](Get-Process -Name "Spotify" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySessionId })
                 if ($spRunning) {
                     $sawSpotify = $true
                     $spotifyLastSeen = Get-Date

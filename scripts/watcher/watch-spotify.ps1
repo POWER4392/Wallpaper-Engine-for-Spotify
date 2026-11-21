@@ -25,9 +25,10 @@ function Test-Bridge {
 }
 
 Write-WatcherLog "Watcher started."
+$mySessionId = (Get-Process -Id $PID).SessionId
 
 while ($true) {
-    $spotify = Get-Process -Name "Spotify" -ErrorAction SilentlyContinue
+    $spotify = Get-Process -Name "Spotify" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySessionId }
     if ($spotify) {
         if (-not (Test-Bridge)) {
             Start-Sleep -Milliseconds 1500
