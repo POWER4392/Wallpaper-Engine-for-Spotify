@@ -65,38 +65,12 @@ if ($localRepoRoot -and (Test-Path (Join-Path $localRepoRoot "scripts\sync\sync-
     }
 }
 
-Write-Host "[2/3] Kiem tra FFmpeg..." -ForegroundColor Yellow
+Write-Host "[2/3] Kiem tra FFmpeg & Python (chay ngam khong chan)..." -ForegroundColor Yellow
 $ffmpegExe = Join-Path $targetDir "tools\ffmpeg\ffmpeg.exe"
 $sysFfmpeg = Get-Command "ffmpeg" -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not (Test-Path $ffmpegExe) -and -not ($sysFfmpeg -and $sysFfmpeg.Source)) {
-    Write-Host "  Dang tai FFmpeg (~114MB) de ho tro chuyen doi video .mp4..." -ForegroundColor Yellow
-    $ffZip = "$env:TEMP\ffmpeg-essentials.zip"
-    try {
-        Download-Fast "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" $ffZip
-        $zipArch = [System.IO.Compression.ZipFile]::OpenRead($ffZip)
-        try {
-            $ffEntry = $zipArch.Entries | Where-Object { $_.FullName -like "*/bin/ffmpeg.exe" } | Select-Object -First 1
-            if ($ffEntry) {
-                $ffDir = Split-Path -Parent $ffmpegExe
-                if (-not (Test-Path $ffDir)) { New-Item -ItemType Directory -Path $ffDir -Force | Out-Null }
-                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($ffEntry, $ffmpegExe, $true)
-                Write-Host "  [OK] Da tai FFmpeg vao: $ffmpegExe" -ForegroundColor Green
-            }
-        } finally {
-            $zipArch.Dispose()
-        }
-        if (Test-Path $ffZip) { Remove-Item -Path $ffZip -Force }
-    } catch {
-        Write-Host "  [!] Khong tai duoc FFmpeg (van chay duoc anh/scene tinh): $($_.Exception.Message)" -ForegroundColor Yellow
-        if (Test-Path $ffZip) { Remove-Item -Path $ffZip -Force }
-    }
-} else {
-    Write-Host "  [OK] Da co san FFmpeg." -ForegroundColor Green
-}
+$hasFfmpeg = (Test-Path $ffmpegExe) -or ($sysFfmpeg -and $sysFfmpeg.Source)
 
-Write-Host "[3/4] Kiem tra Python (Pillow & NumPy) de ghep scene .pkg..." -ForegroundColor Yellow
-$embPyDir = Join-Path $targetDir "tools\python"
-$embPyExe = Join-Path $embPyDir "python.exe"
+$embPyExe = Join-Path $targetDir "tools\python\python.exe"
 $hasReadyPy = $false
 if (Test-Path $embPyExe) {
     & $embPyExe -c "import PIL, numpy" 2>$null
@@ -106,49 +80,21 @@ if (-not $hasReadyPy) {
     $sysPy = (Get-Command 'py', 'python' -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } | Select-Object -First 1).Source
     if ($sysPy) {
         & $sysPy -c "import PIL, numpy" 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            $hasReadyPy = $true
-        } else {
-            Write-Host "  Dang cai pillow & numpy cho Python..." -ForegroundColor Yellow
-            & $sysPy -m pip install --quiet --no-warn-script-location pillow numpy 2>$null
-            & $sysPy -c "import PIL, numpy" 2>$null
-            if ($LASTEXITCODE -eq 0) { $hasReadyPy = $true }
-        }
+        if ($LASTEXITCODE -eq 0) { $hasReadyPy = $true }
     }
-}
-if (-not $hasReadyPy) {
-    Write-Host "  Dang tai Python Embeddable + Pillow/NumPy (~35MB)..." -ForegroundColor Yellow
-    $pyZip = "$env:TEMP\python-embed.zip"
-    $getPip = "$env:TEMP\get-pip.py"
-    try {
-        Download-Fast "https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip" $pyZip
-        Expand-Fast $pyZip $embPyDir
-        $pthFile = Get-ChildItem -Path $embPyDir -Filter "python*._pth" | Select-Object -First 1
-        if ($pthFile) {
-            $pthText = Get-Content $pthFile.FullName -Raw
-            $pthText = $pthText -replace '#import site', 'import site'
-            Set-Content -Path $pthFile.FullName -Value $pthText -Encoding ASCII
-        }
-        Download-Fast "https://bootstrap.pypa.io/get-pip.py" $getPip
-        & $embPyExe $getPip --no-warn-script-location --no-cache-dir --disable-pip-version-check --quiet
-        & $embPyExe -m pip install --no-warn-script-location --no-cache-dir --only-binary=:all: --disable-pip-version-check --quiet pillow numpy
-        & $embPyExe -c "import PIL, numpy" 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  [OK] Da cai dat xong Python + Pillow/NumPy vao: $embPyDir" -ForegroundColor Green
-        } else {
-            Write-Host "  [!] Cai Python hoan tat nhung thieu thu vien PIL/numpy." -ForegroundColor Yellow
-        }
-    } catch {
-        Write-Host "  [!] Khong tai duoc Python (van chay duoc video/anh): $($_.Exception.Message)" -ForegroundColor Yellow
-    } finally {
-        if (Test-Path $pyZip) { Remove-Item -Path $pyZip -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $getPip) { Remove-Item -Path $getPip -Force -ErrorAction SilentlyContinue }
-    }
-} else {
-    Write-Host "  [OK] Da co san Python + Pillow/NumPy." -ForegroundColor Green
 }
 
-Write-Host "[4/4] Dang ky tu dong chay ngam cung Windows..." -ForegroundColor Yellow
+if ($hasFfmpeg -and $hasReadyPy) {
+    Write-Host "  [OK] Da co san FFmpeg & Python + Pillow/NumPy." -ForegroundColor Green
+} else {
+    $bgDepsScript = Join-Path $targetDir "scripts\setup\install-deps-bg.ps1"
+    if (Test-Path $bgDepsScript) {
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$bgDepsScript`" -TargetDir `"$targetDir`"" -WindowStyle Hidden
+        Write-Host "  [OK] Dang tai bo tro (FFmpeg/Python) o che do nen, khong can doi." -ForegroundColor Green
+    }
+}
+
+Write-Host "[3/3] Dang ky tu dong chay ngam cung Windows..." -ForegroundColor Yellow
 try {
     $wsh = New-Object -ComObject WScript.Shell
     $startupLnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\SpotifyWallpaperWatcher.lnk"
