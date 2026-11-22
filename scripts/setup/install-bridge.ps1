@@ -1,5 +1,25 @@
 $ErrorActionPreference = "SilentlyContinue"
+$ProgressPreference = "SilentlyContinue"
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { $null = $_ }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function Download-Fast([string]$url, [string]$outFile) {
+    $curl = Get-Command "curl.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($curl) {
+        & $curl.Source -fsSL --retry 2 --connect-timeout 10 -o $outFile $url 2>$null
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $outFile) -and (Get-Item $outFile).Length -gt 0) {
+            return
+        }
+    }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri $url -OutFile $outFile -UseBasicParsing
+}
+
+function Expand-Fast([string]$zipPath, [string]$destDir) {
+    if (Test-Path $destDir) { Remove-Item -Path $destDir -Recurse -Force -ErrorAction SilentlyContinue }
+    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $destDir)
+}
 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  Spotify <-> Wallpaper Engine Sync - Setup Chay Ngam" -ForegroundColor Cyan
@@ -24,10 +44,8 @@ if ($localRepoRoot -and (Test-Path (Join-Path $localRepoRoot "scripts\sync\sync-
     $extractTemp = "$env:TEMP\spotify-we-extract"
 
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
-        if (Test-Path $extractTemp) { Remove-Item -Path $extractTemp -Recurse -Force }
-        Expand-Archive -Path $zipPath -DestinationPath $extractTemp -Force
+        Download-Fast $zipUrl $zipPath
+        Expand-Fast $zipPath $extractTemp
         $extractedDir = Get-ChildItem -Path $extractTemp -Directory | Select-Object -First 1
         if (-not $extractedDir) { throw "Khong tim thay thu muc giai nen tu GitHub." }
         $sourceDir = $extractedDir.FullName
@@ -54,9 +72,7 @@ if (-not (Test-Path $ffmpegExe) -and -not ($sysFfmpeg -and $sysFfmpeg.Source)) {
     Write-Host "  Dang tai FFmpeg (~114MB) de ho tro chuyen doi video .mp4..." -ForegroundColor Yellow
     $ffZip = "$env:TEMP\ffmpeg-essentials.zip"
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $ffZip -UseBasicParsing
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        Download-Fast "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" $ffZip
         $zipArch = [System.IO.Compression.ZipFile]::OpenRead($ffZip)
         try {
             $ffEntry = $zipArch.Entries | Where-Object { $_.FullName -like "*/bin/ffmpeg.exe" } | Select-Object -First 1
@@ -105,19 +121,17 @@ if (-not $hasReadyPy) {
     $pyZip = "$env:TEMP\python-embed.zip"
     $getPip = "$env:TEMP\get-pip.py"
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip" -OutFile $pyZip -UseBasicParsing
-        if (-not (Test-Path $embPyDir)) { New-Item -ItemType Directory -Path $embPyDir -Force | Out-Null }
-        Expand-Archive -Path $pyZip -DestinationPath $embPyDir -Force
+        Download-Fast "https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip" $pyZip
+        Expand-Fast $pyZip $embPyDir
         $pthFile = Get-ChildItem -Path $embPyDir -Filter "python*._pth" | Select-Object -First 1
         if ($pthFile) {
             $pthText = Get-Content $pthFile.FullName -Raw
             $pthText = $pthText -replace '#import site', 'import site'
             Set-Content -Path $pthFile.FullName -Value $pthText -Encoding ASCII
         }
-        Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip -UseBasicParsing
-        & $embPyExe $getPip --no-warn-script-location --quiet
-        & $embPyExe -m pip install --no-warn-script-location --quiet pillow numpy
+        Download-Fast "https://bootstrap.pypa.io/get-pip.py" $getPip
+        & $embPyExe $getPip --no-warn-script-location --no-cache-dir --disable-pip-version-check --quiet
+        & $embPyExe -m pip install --no-warn-script-location --no-cache-dir --only-binary=:all: --disable-pip-version-check --quiet pillow numpy
         & $embPyExe -c "import PIL, numpy" 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  [OK] Da cai dat xong Python + Pillow/NumPy vao: $embPyDir" -ForegroundColor Green
