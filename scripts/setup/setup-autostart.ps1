@@ -1,4 +1,4 @@
-﻿$wsh = New-Object -ComObject WScript.Shell
+$wsh = New-Object -ComObject WScript.Shell
 $vbsPath = (Join-Path $PSScriptRoot "launch-spotify.vbs")
 $spotifyExe = "$env:APPDATA\Spotify\Spotify.exe"
 if (-not (Test-Path $spotifyExe)) {
@@ -48,7 +48,19 @@ try {
     $lnkW.Arguments = "`"$watcherVbs`""
     $lnkW.WorkingDirectory = $watcherDir
     $lnkW.Save()
-    Write-Host "  [OK] Updated Startup Watcher shortcut" -ForegroundColor Green
+    $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    if (-not (Test-Path $runKey)) { New-Item -Path $runKey -Force | Out-Null }
+    Set-ItemProperty -Path $runKey -Name "SpotifyWallpaperWatcher" -Value "wscript.exe `"$watcherVbs`""
+    foreach ($saKey in @(
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder",
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+    )) {
+        if (Test-Path $saKey) {
+            Remove-ItemProperty -Path $saKey -Name "SpotifyWallpaperWatcher.lnk" -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $saKey -Name "SpotifyWallpaperWatcher" -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Host "  [OK] Updated Startup Watcher shortcut + Registry Run" -ForegroundColor Green
 } catch {
     Write-Host "  [!] Could not create Startup Watcher shortcut" -ForegroundColor Yellow
 }

@@ -154,12 +154,34 @@ try {
     $lnk.WorkingDirectory = (Join-Path $targetDir "scripts\watcher")
     $lnk.Description = "Spotify Wallpaper Engine Watcher Daemon"
     $lnk.Save()
-    Write-Host "  [OK] Da tao shortcut trong Startup Windows" -ForegroundColor Green
+
+    $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    if (-not (Test-Path $runKey)) { New-Item -Path $runKey -Force | Out-Null }
+    if ($watcherVbs.EndsWith(".vbs")) {
+        Set-ItemProperty -Path $runKey -Name "SpotifyWallpaperWatcher" -Value "wscript.exe `"$watcherVbs`""
+    } else {
+        Set-ItemProperty -Path $runKey -Name "SpotifyWallpaperWatcher" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watcherVbs`""
+    }
+
+    foreach ($saKey in @(
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder",
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+    )) {
+        if (Test-Path $saKey) {
+            Remove-ItemProperty -Path $saKey -Name "SpotifyWallpaperWatcher.lnk" -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $saKey -Name "SpotifyWallpaperWatcher" -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Host "  [OK] Da tao Startup + Registry Run cho Watcher" -ForegroundColor Green
 } catch {
     Write-Host "  [!] Loi tao shortcut: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-Write-Host "Dang khoi dong Bridge ket noi..." -ForegroundColor Cyan
+Write-Host "Dang khoi dong Watcher & Bridge ket noi..." -ForegroundColor Cyan
+$watcherRunVbs = Join-Path $targetDir "scripts\watcher\watch-spotify-silent.vbs"
+if (Test-Path $watcherRunVbs) {
+    Start-Process -FilePath "wscript.exe" -ArgumentList "`"$watcherRunVbs`"" -WindowStyle Hidden
+}
 $syncVbs = Join-Path $targetDir "scripts\sync\start-sync-silent.vbs"
 if (Test-Path $syncVbs) {
     Start-Process -FilePath "wscript.exe" -ArgumentList "`"$syncVbs`"" -WindowStyle Hidden

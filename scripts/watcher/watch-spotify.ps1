@@ -1,3 +1,7 @@
+$createdNew = $false
+$mutex = New-Object System.Threading.Mutex($true, "Local\SpotifyWallpaperWatcher", [ref]$createdNew)
+if (-not $createdNew) { exit 0 }
+
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 $syncDir = Join-Path (Split-Path -Parent $scriptDir) "sync"
 $silentVbsPath = Join-Path $syncDir "start-sync-silent.vbs"
