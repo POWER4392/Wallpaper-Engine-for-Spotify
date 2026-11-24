@@ -24,6 +24,8 @@
     --spice-sidebar: #000000 !important;
     --spice-player: rgba(12, 12, 12, var(--we-player-opacity)) !important;
     --spice-card: rgba(255, 255, 255, 0.05) !important;
+    --carousel-start-chevron-gradient: transparent !important;
+    --carousel-end-chevron-gradient: transparent !important;
 }
 
 html,
@@ -33,15 +35,7 @@ body,
 .RootContainer,
 .Root__top-container,
 .Root__main-view,
-.main-view-container,
-.main-view-container__scroll-node,
-.main-view-container__scroll-node-child,
-.os-viewport,
-[data-overlayscrollbars-viewport],
-main,
-section,
-.marketplace-header,
-.main-home-content {
+.main-view-container {
     overflow-x: hidden !important;
     max-width: 100vw !important;
 }
